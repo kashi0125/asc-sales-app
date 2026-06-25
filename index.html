@@ -7,12 +7,36 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <!-- Firebase -->
+  <script type="module" id="firebase-init">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, query } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDSMlDysOQfsaQDmRxHepIcII301GEmXrc",
+      authDomain: "asc-sales.firebaseapp.com",
+      projectId: "asc-sales",
+      storageBucket: "asc-sales.firebasestorage.app",
+      messagingSenderId: "397341942869",
+      appId: "1:397341942869:web:b291915f87fe834d9ee0dc",
+      measurementId: "G-R17Y71S3TC"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    window.__firebase = { auth, db, signInWithEmailAndPassword, signOut, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, query };
+  </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #F2F4F7; font-family: 'Helvetica Neue', Arial, sans-serif; }
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     input[type=number] { -moz-appearance: textfield; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { width: 36px; height: 36px; border: 3px solid #ddd; border-top-color: #2563A8; border-radius: 50%; animation: spin 0.8s linear infinite; }
     @media print {
       .no-print { display: none !important; }
       body { margin: 0; background: #fff; }
@@ -23,175 +47,380 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect } = React;
+const { useState, useEffect, useCallback } = React;
 
+// ─── 定数 ───
 const RATES = {
-  SS: { delivery: 260, pickup: 100 },
-  S:  { delivery: 520, pickup: 150 },
-  A:  { delivery: 750, pickup: 330 },
-  B:  { delivery: 800, pickup: 430 },
-  C:  { delivery: 1580, pickup: 540 },
-  D:  { delivery: 2600, pickup: 900 },
+  SS: { delivery: 260,  pickup: 100  },
+  S:  { delivery: 520,  pickup: 150  },
+  A:  { delivery: 750,  pickup: 330  },
+  B:  { delivery: 800,  pickup: 430  },
+  C:  { delivery: 1580, pickup: 540  },
+  D:  { delivery: 2600, pickup: 900  },
   E:  { delivery: 3090, pickup: 1550 },
   F:  { delivery: 3280, pickup: 2290 },
   G:  { delivery: 4080, pickup: 2780 },
 };
 const SIZES = Object.keys(RATES);
+const STAFF_COLORS = [
+  '#2563A8','#16A34A','#DC2626','#9333EA','#D97706',
+  '#0891B2','#DB2777','#65A30D','#EA580C','#7C3AED',
+];
 
 const today = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 };
-const monthKey = (s) => s.slice(0, 7);
-const fmt = (n) => n.toLocaleString('ja-JP');
+const monthKey  = s => s.slice(0, 7);
+const fmt       = n => n.toLocaleString('ja-JP');
+const staffColor= idx => STAFF_COLORS[idx % STAFF_COLORS.length];
+const dateLabel = d => {
+  const dt = new Date(d + 'T00:00:00');
+  return `${dt.getMonth()+1}/${dt.getDate()}(${'日月火水木金土'[dt.getDay()]})`;
+};
+const monthLabel = m => { const [y,mo]=m.split('-'); return `${y}年${parseInt(mo)}月`; };
 
 const emptyEntry = () => {
   const e = { options: [] };
   SIZES.forEach(s => { e[s] = { delivery: '', pickup: '' }; });
   return e;
 };
+const calcBaseTotal   = e => SIZES.reduce((t,s)=>(t+(parseInt(e[s]?.delivery)||0)*RATES[s].delivery+(parseInt(e[s]?.pickup)||0)*RATES[s].pickup),0);
+const calcOptionTotal = e => (e.options||[]).reduce((s,o)=>s+(parseInt(o.amount)||0),0);
+const calcDayTotal    = e => calcBaseTotal(e)+calcOptionTotal(e);
 
-const calcBaseTotal = (entry) => {
-  let t = 0;
-  SIZES.forEach(s => {
-    t += (parseInt(entry[s]?.delivery) || 0) * RATES[s].delivery;
-    t += (parseInt(entry[s]?.pickup)   || 0) * RATES[s].pickup;
-  });
-  return t;
-};
-const calcOptionTotal = (entry) =>
-  (entry.options || []).reduce((sum, o) => sum + (parseInt(o.amount) || 0), 0);
-const calcDayTotal = (entry) => calcBaseTotal(entry) + calcOptionTotal(entry);
+// ─── Firebase ヘルパー ───
+const getFirebase = () => window.__firebase;
 
-// ─── Storage keys ───
-const STAFF_KEY   = 'asc_staff_v2';
-const RECORDS_KEY = 'asc_records_v2';
+async function loadUserProfile(uid) {
+  const { db, doc, getDoc } = getFirebase();
+  const snap = await getDoc(doc(db, 'users', uid));
+  return snap.exists() ? snap.data() : null;
+}
 
-const loadStaff = () => {
-  try {
-    const r = localStorage.getItem(STAFF_KEY);
-    return r ? JSON.parse(r) : [{ id: 'staff_1', name: 'スタッフ1' }];
-  } catch { return [{ id: 'staff_1', name: 'スタッフ1' }]; }
-};
-const saveStaff = (staff) => {
-  try { localStorage.setItem(STAFF_KEY, JSON.stringify(staff)); } catch {}
-};
+async function loadAllStaff(db, collection, getDocs) {
+  const snap = await getDocs(collection(db, 'users'));
+  return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+}
 
-// records: { staffId: { date: entry } }
-const loadRecords = () => {
-  try { const r = localStorage.getItem(RECORDS_KEY); return r ? JSON.parse(r) : {}; } catch { return {}; }
-};
-const saveRecords = (recs) => {
-  try { localStorage.setItem(RECORDS_KEY, JSON.stringify(recs)); } catch {}
-};
+async function saveRecord(uid, date, entry) {
+  const { db, doc, setDoc } = getFirebase();
+  await setDoc(doc(db, 'records', `${uid}_${date}`), { uid, date, entry });
+}
 
-const dateLabel = (d) => {
-  const dt = new Date(d + 'T00:00:00');
-  return `${dt.getMonth()+1}/${dt.getDate()}(${'日月火水木金土'[dt.getDay()]})`;
-};
-const monthLabel = (m) => { const [y, mo] = m.split('-'); return `${y}年${parseInt(mo)}月`; };
+async function deleteRecord(uid, date) {
+  const { db, doc, deleteDoc } = getFirebase();
+  await deleteDoc(doc(db, 'records', `${uid}_${date}`));
+}
 
-// ─── Staff color palette ───
-const STAFF_COLORS = [
-  '#2563A8', '#16A34A', '#DC2626', '#9333EA', '#D97706',
-  '#0891B2', '#DB2777', '#65A30D', '#EA580C', '#7C3AED',
-];
-const staffColor = (idx) => STAFF_COLORS[idx % STAFF_COLORS.length];
+// ─── ログイン画面 ───
+function LoginScreen({ onLogin }) {
+  const [email, setEmail]     = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError]     = useState('');
+  const [loading, setLoading] = useState(false);
 
-// ─── Staff Manager Modal ───
-function StaffModal({ staff, onClose, onSave }) {
-  const [list, setList] = useState(staff.map(s => ({ ...s })));
-  const [newName, setNewName] = useState('');
-
-  const addStaff = () => {
-    const name = newName.trim();
-    if (!name) return;
-    const id = 'staff_' + Date.now();
-    setList(prev => [...prev, { id, name }]);
-    setNewName('');
-  };
-
-  const removeMember = (id) => {
-    if (list.length <= 1) return;
-    setList(prev => prev.filter(s => s.id !== id));
-  };
-
-  const updateName = (id, name) => {
-    setList(prev => prev.map(s => s.id === id ? { ...s, name } : s));
-  };
-
-  const handleSave = () => {
-    const cleaned = list.filter(s => s.name.trim());
-    if (cleaned.length === 0) return;
-    onSave(cleaned);
-    onClose();
+  const handleLogin = async () => {
+    if (!email || !password) return;
+    setLoading(true);
+    setError('');
+    try {
+      const { auth, signInWithEmailAndPassword } = getFirebase();
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (e) {
+      setError('メールアドレスまたはパスワードが正しくありません');
+    }
+    setLoading(false);
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div style={{ background: '#fff', width: '100%', maxWidth: 480, borderRadius: '18px 18px 0 0', padding: '20px 16px 32px', maxHeight: '80vh', overflowY: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-          <span style={{ fontSize: 18, fontWeight: 700, color: '#1A3A5C', flex: 1 }}>👥 スタッフ管理</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: '#888', cursor: 'pointer' }}>✕</button>
+    <div style={{ minHeight:'100vh', background:'linear-gradient(135deg,#1A3A5C 0%,#2563A8 100%)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+      <div style={{ background:'#fff', borderRadius:20, padding:'32px 24px', width:'100%', maxWidth:380, boxShadow:'0 8px 32px rgba(0,0,0,0.18)' }}>
+        <div style={{ textAlign:'center', marginBottom:28 }}>
+          <div style={{ fontSize:11, color:'#888', letterSpacing:2, marginBottom:6 }}>アートセッティングデリバリー</div>
+          <div style={{ fontSize:24, fontWeight:800, color:'#1A3A5C' }}>ASC 売上記録</div>
         </div>
 
-        {list.map((s, idx) => (
-          <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <div style={{ width: 12, height: 12, borderRadius: '50%', background: staffColor(idx), flexShrink: 0 }} />
-            <input
-              value={s.name}
-              onChange={e => updateName(s.id, e.target.value)}
-              style={{ flex: 1, padding: '10px 12px', fontSize: 15, border: '1.5px solid #D0D7E3', borderRadius: 10, outline: 'none', color: '#1A3A5C' }}
-            />
-            <button
-              onClick={() => removeMember(s.id)}
-              disabled={list.length <= 1}
-              style={{ padding: '8px 10px', borderRadius: 8, border: '1.5px solid #EF4444', background: '#fff', color: list.length <= 1 ? '#ccc' : '#EF4444', fontSize: 14, cursor: list.length <= 1 ? 'not-allowed' : 'pointer', fontWeight: 700 }}>
-              🗑️
-            </button>
-          </div>
-        ))}
-
-        <div style={{ display: 'flex', gap: 8, marginTop: 14, marginBottom: 18 }}>
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:12, color:'#555', marginBottom:6, fontWeight:600 }}>メールアドレス</div>
           <input
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addStaff()}
-            placeholder="新しいスタッフ名を入力"
-            style={{ flex: 1, padding: '10px 12px', fontSize: 15, border: '1.5px solid #D0D7E3', borderRadius: 10, outline: 'none', color: '#1A3A5C' }}
+            type="email" value={email} onChange={e=>setEmail(e.target.value)}
+            placeholder="example@mail.com"
+            style={{ width:'100%', padding:'12px 14px', fontSize:15, border:'1.5px solid #D0D7E3', borderRadius:10, outline:'none', color:'#1A3A5C' }}
           />
-          <button onClick={addStaff} style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: '#2563A8', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>＋ 追加</button>
+        </div>
+        <div style={{ marginBottom:20 }}>
+          <div style={{ fontSize:12, color:'#555', marginBottom:6, fontWeight:600 }}>パスワード</div>
+          <input
+            type="password" value={password} onChange={e=>setPassword(e.target.value)}
+            onKeyDown={e=>e.key==='Enter'&&handleLogin()}
+            placeholder="パスワードを入力"
+            style={{ width:'100%', padding:'12px 14px', fontSize:15, border:'1.5px solid #D0D7E3', borderRadius:10, outline:'none', color:'#1A3A5C' }}
+          />
         </div>
 
-        <button onClick={handleSave} style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: '#1A3A5C', color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>
-          ✅ 保存して閉じる
+        {error && <div style={{ color:'#EF4444', fontSize:13, marginBottom:14, textAlign:'center' }}>{error}</div>}
+
+        <button onClick={handleLogin} disabled={loading} style={{
+          width:'100%', padding:'14px', borderRadius:12, border:'none',
+          background: loading?'#BCC3CF':'#1A3A5C', color:'#fff',
+          fontSize:16, fontWeight:700, cursor: loading?'not-allowed':'pointer'
+        }}>
+          {loading ? 'ログイン中...' : 'ログイン'}
+        </button>
+
+        <div style={{ marginTop:18, padding:'14px', background:'#F0F5FF', borderRadius:10, fontSize:12, color:'#555', lineHeight:1.7 }}>
+          <b>ログインできない場合：</b><br/>
+          管理者にアカウントの発行を依頼してください。
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── スタッフ管理モーダル（管理者用） ───
+function StaffModal({ onClose, currentUid }) {
+  const [staffList, setStaffList] = useState([]);
+  const [newEmail, setNewEmail]   = useState('');
+  const [newName, setNewName]     = useState('');
+  const [newPass, setNewPass]     = useState('');
+  const [newRole, setNewRole]     = useState('staff');
+  const [msg, setMsg]             = useState('');
+  const [loading, setLoading]     = useState(true);
+
+  useEffect(() => {
+    const { db, collection, getDocs } = getFirebase();
+    loadAllStaff(db, collection, getDocs).then(list => {
+      setStaffList(list);
+      setLoading(false);
+    });
+  }, []);
+
+  const handleAdd = async () => {
+    if (!newEmail.trim() || !newName.trim() || !newPass.trim()) {
+      setMsg('すべての項目を入力してください'); return;
+    }
+    setMsg('');
+    try {
+      // Firebase Admin APIはクライアントから呼べないため、
+      // 管理者がFirebaseコンソールでユーザー追加後、Firestoreにプロフィールを登録する方式
+      setMsg('⚠️ ユーザー追加はFirebaseコンソールから行ってください（下記手順参照）');
+    } catch(e) {
+      setMsg('エラー: ' + e.message);
+    }
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+      <div style={{ background:'#fff', width:'100%', maxWidth:480, borderRadius:'18px 18px 0 0', padding:'20px 16px 32px', maxHeight:'85vh', overflowY:'auto' }}>
+        <div style={{ display:'flex', alignItems:'center', marginBottom:16 }}>
+          <span style={{ fontSize:18, fontWeight:700, color:'#1A3A5C', flex:1 }}>👥 スタッフ一覧</span>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, color:'#888', cursor:'pointer' }}>✕</button>
+        </div>
+
+        {loading ? <div style={{ textAlign:'center', padding:20 }}><div className="spinner" style={{ margin:'0 auto' }}/></div> : (
+          staffList.map((s,i) => (
+            <div key={s.uid} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background:i%2?'#F8FAFC':'#fff', borderRadius:8, marginBottom:4 }}>
+              <div style={{ width:10, height:10, borderRadius:'50%', background:staffColor(i), flexShrink:0 }}/>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:700, fontSize:14, color:'#1A3A5C' }}>{s.name}</div>
+                <div style={{ fontSize:11, color:'#888' }}>{s.email}</div>
+              </div>
+              <span style={{ fontSize:11, padding:'2px 8px', borderRadius:6, background: s.role==='admin'?'#DBEAFE':'#F0FDF4', color: s.role==='admin'?'#1D4ED8':'#15803D', fontWeight:600 }}>
+                {s.role==='admin'?'管理者':'スタッフ'}
+              </span>
+            </div>
+          ))
+        )}
+
+        <div style={{ marginTop:20, padding:14, background:'#FFF7ED', borderRadius:12, border:'1px solid #FED7AA' }}>
+          <div style={{ fontWeight:700, color:'#C2410C', marginBottom:8, fontSize:13 }}>➕ スタッフを追加するには</div>
+          <div style={{ fontSize:12, color:'#555', lineHeight:1.8 }}>
+            1. <a href="https://console.firebase.google.com" target="_blank" style={{ color:'#2563A8' }}>Firebaseコンソール</a> を開く<br/>
+            2. Authentication → 「ユーザーを追加」<br/>
+            3. メール・パスワードを設定してユーザー作成<br/>
+            4. 作成されたUIDをコピー<br/>
+            5. Firestore → users コレクション → 新しいドキュメント（IDにUID）を追加<br/>
+            　フィールド：<code>name</code>（表示名）、<code>email</code>、<code>role</code>（adminまたはstaff）
+          </div>
+        </div>
+
+        {msg && <div style={{ marginTop:12, padding:10, background:'#FEF2F2', color:'#DC2626', borderRadius:8, fontSize:13 }}>{msg}</div>}
+
+        <button onClick={onClose} style={{ width:'100%', marginTop:16, padding:14, borderRadius:12, border:'none', background:'#1A3A5C', color:'#fff', fontSize:15, fontWeight:700, cursor:'pointer' }}>
+          閉じる
         </button>
       </div>
     </div>
   );
 }
 
+// ─── 印刷ビュー ───
+function PrintView({ onBack, staffName, currentMonth, monthDays, monthBaseTotal, monthOptionTotal, monthTotal, monthBreakdown, monthOptions }) {
+  const [y, m] = currentMonth.split('-');
+  const title = `${y}年${parseInt(m)}月　売上明細　${staffName}`;
+  return (
+    <div style={{ background:'#fff', minHeight:'100vh' }}>
+      <div className="no-print" style={{ position:'sticky', top:0, zIndex:10, background:'#1A3A5C', color:'#fff', padding:'12px 16px', display:'flex', alignItems:'center', gap:10 }}>
+        <button onClick={onBack} style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'#fff', borderRadius:8, padding:'6px 12px', fontSize:13, cursor:'pointer' }}>← 戻る</button>
+        <span style={{ flex:1, fontWeight:700, fontSize:15 }}>印刷プレビュー</span>
+        <span style={{ fontSize:11, color:'rgba(255,255,255,0.85)', textAlign:'right', lineHeight:1.5 }}>🖨️ ブラウザの「印刷」メニューから<br/>PDF保存できます</span>
+      </div>
+      <div className="print-root" style={{ padding:'20px 18px', maxWidth:680, margin:'0 auto', color:'#111' }}>
+        <div style={{ textAlign:'center', marginBottom:18 }}>
+          <div style={{ fontSize:11, color:'#666', marginBottom:4 }}>アートセッティングデリバリー（ASC）</div>
+          <div style={{ fontSize:22, fontWeight:700, borderBottom:'2px solid #1A3A5C', paddingBottom:8 }}>{title}</div>
+        </div>
+        <div style={{ border:'2px solid #1A3A5C', borderRadius:8, padding:'12px 16px', marginBottom:18, display:'flex', justifyContent:'space-between', alignItems:'center', background:'#F0F5FF' }}>
+          <div>
+            <div style={{ fontSize:11, color:'#555' }}>基本料金　¥{fmt(monthBaseTotal)}</div>
+            <div style={{ fontSize:11, color:'#555' }}>オプション　{monthOptionTotal>=0?'+':''}¥{fmt(monthOptionTotal)}</div>
+            <div style={{ fontSize:11, color:'#555', marginTop:2 }}>{monthDays.length}日分の記録</div>
+          </div>
+          <div style={{ textAlign:'right' }}>
+            <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>月間合計（税別）</div>
+            <div style={{ fontSize:28, fontWeight:700, color:'#1A3A5C' }}>¥{fmt(monthTotal)}</div>
+          </div>
+        </div>
+        <div style={{ marginBottom:18 }}>
+          <div style={{ fontWeight:700, fontSize:13, color:'#1A3A5C', borderBottom:'1.5px solid #1A3A5C', paddingBottom:4, marginBottom:6 }}>日別売上</div>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+            <thead><tr style={{ background:'#1A3A5C', color:'#fff' }}>
+              {['日付','内訳','基本','OP','合計'].map((h,i)=><th key={h} style={{ padding:'6px 8px', textAlign:i>=2?'right':'left' }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {monthDays.map(([d,e],i)=>{
+                const base=calcBaseTotal(e), opt=calcOptionTotal(e);
+                const detail=SIZES.filter(s=>(parseInt(e[s]?.delivery)||0)+(parseInt(e[s]?.pickup)||0)>0)
+                  .map(s=>{const dv=parseInt(e[s]?.delivery)||0,pk=parseInt(e[s]?.pickup)||0;return[dv>0&&`${s}配${dv}`,pk>0&&`${s}集${pk}`].filter(Boolean).join(' ');}).join('　');
+                return <tr key={d} style={{ background:i%2===0?'#fff':'#F8FAFC', borderBottom:'1px solid #E5E7EB' }}>
+                  <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>{dateLabel(d)}</td>
+                  <td style={{ padding:'5px 8px', color:'#444', fontSize:11 }}>{detail||'—'}</td>
+                  <td style={{ padding:'5px 8px', textAlign:'right' }}>¥{fmt(base)}</td>
+                  <td style={{ padding:'5px 8px', textAlign:'right', color:opt!==0?'#5B4FCF':'#ccc' }}>{opt!==0?(opt>0?'+':'')+'¥'+fmt(opt):'—'}</td>
+                  <td style={{ padding:'5px 8px', textAlign:'right', fontWeight:600 }}>¥{fmt(base+opt)}</td>
+                </tr>;
+              })}
+              <tr style={{ background:'#EEF4FF', borderTop:'2px solid #1A3A5C', fontWeight:700 }}>
+                <td colSpan={2} style={{ padding:'7px 8px' }}>合計</td>
+                <td style={{ padding:'7px 8px', textAlign:'right' }}>¥{fmt(monthBaseTotal)}</td>
+                <td style={{ padding:'7px 8px', textAlign:'right', color:'#5B4FCF' }}>{monthOptionTotal!==0?(monthOptionTotal>0?'+':'')+'¥'+fmt(monthOptionTotal):'—'}</td>
+                <td style={{ padding:'7px 8px', textAlign:'right', fontSize:14 }}>¥{fmt(monthTotal)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        {monthBreakdown.length>0&&<div style={{ marginBottom:18 }}>
+          <div style={{ fontWeight:700, fontSize:13, color:'#1A3A5C', borderBottom:'1.5px solid #1A3A5C', paddingBottom:4, marginBottom:6 }}>サイズ別集計</div>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+            <thead><tr style={{ background:'#1A3A5C', color:'#fff' }}>
+              {['サイズ','配達件数','配達金額','集荷件数','集荷金額','小計'].map((h,i)=><th key={h} style={{ padding:'6px 8px', textAlign:i===0?'left':'right' }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {monthBreakdown.map((r,i)=><tr key={r.size} style={{ background:i%2===0?'#fff':'#F8FAFC', borderBottom:'1px solid #E5E7EB' }}>
+                <td style={{ padding:'5px 8px', fontWeight:700 }}>{r.size}</td>
+                <td style={{ padding:'5px 8px', textAlign:'right' }}>{r.dc>0?r.dc+'件':'—'}</td>
+                <td style={{ padding:'5px 8px', textAlign:'right' }}>{r.da>0?'¥'+fmt(r.da):'—'}</td>
+                <td style={{ padding:'5px 8px', textAlign:'right' }}>{r.pc>0?r.pc+'件':'—'}</td>
+                <td style={{ padding:'5px 8px', textAlign:'right' }}>{r.pa>0?'¥'+fmt(r.pa):'—'}</td>
+                <td style={{ padding:'5px 8px', textAlign:'right', fontWeight:600 }}>¥{fmt(r.da+r.pa)}</td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>}
+        <div style={{ textAlign:'right', fontSize:10, color:'#aaa', marginTop:24 }}>出力日：{new Date().toLocaleDateString('ja-JP')}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── メインアプリ ───
 function App() {
-  const [view, setView]               = useState('input');
-  const [selectedDate, setSelectedDate] = useState(today());
-  const [records, setRecords]         = useState(loadRecords);
-  const [staff, setStaff]             = useState(loadStaff);
-  const [currentStaffId, setCurrentStaffId] = useState(() => loadStaff()[0]?.id ?? 'staff_1');
-  const [entry, setEntry]             = useState(emptyEntry());
-  const [saved, setSaved]             = useState(false);
-  const [printView, setPrintView]     = useState(false);
+  const [authUser, setAuthUser]           = useState(undefined); // undefined=初期化中
+  const [userProfile, setUserProfile]     = useState(null);
+  const [view, setView]                   = useState('input');
+  const [selectedDate, setSelectedDate]   = useState(today());
+  const [records, setRecords]             = useState({});  // { uid: { date: entry } }
+  const [allStaff, setAllStaff]           = useState([]);
+  const [currentStaffId, setCurrentStaffId] = useState(null);
+  const [entry, setEntry]                 = useState(emptyEntry());
+  const [saved, setSaved]                 = useState(false);
+  const [saving, setSaving]               = useState(false);
+  const [printView, setPrintView]         = useState(false);
   const [showStaffModal, setShowStaffModal] = useState(false);
+  const [dataLoading, setDataLoading]     = useState(true);
 
-  // Ensure currentStaffId is valid after staff changes
+  const isAdmin = userProfile?.role === 'admin';
+
+  // 認証状態監視
   useEffect(() => {
-    if (!staff.find(s => s.id === currentStaffId)) {
-      setCurrentStaffId(staff[0]?.id);
+    const interval = setInterval(() => {
+      if (!window.__firebase) return;
+      clearInterval(interval);
+      const { auth, onAuthStateChanged } = window.__firebase;
+      onAuthStateChanged(auth, async user => {
+        setAuthUser(user);
+        if (user) {
+          const profile = await loadUserProfile(user.uid);
+          setUserProfile(profile);
+        } else {
+          setUserProfile(null);
+        }
+      });
+    }, 300);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ログイン後データ読み込み
+  useEffect(() => {
+    if (!authUser || !userProfile) return;
+    setDataLoading(true);
+    const { db, collection, onSnapshot } = window.__firebase;
+
+    if (isAdmin) {
+      // 管理者：全スタッフ情報を取得
+      loadAllStaff(db, collection, window.__firebase.getDocs).then(list => {
+        setAllStaff(list);
+        if (!currentStaffId) setCurrentStaffId(authUser.uid);
+      });
+      // 全レコードをリアルタイム監視
+      const unsub = onSnapshot(collection(db, 'records'), snap => {
+        const recs = {};
+        snap.docs.forEach(d => {
+          const { uid, date, entry } = d.data();
+          if (!recs[uid]) recs[uid] = {};
+          recs[uid][date] = entry;
+        });
+        setRecords(recs);
+        setDataLoading(false);
+      });
+      return () => unsub();
+    } else {
+      // 一般スタッフ：自分の情報のみ
+      setAllStaff([{ uid: authUser.uid, ...userProfile }]);
+      setCurrentStaffId(authUser.uid);
+      const unsub = onSnapshot(
+        window.__firebase.query(collection(db, 'records')),
+        snap => {
+          const recs = {};
+          snap.docs.forEach(d => {
+            const { uid, date, entry } = d.data();
+            if (uid === authUser.uid) {
+              if (!recs[uid]) recs[uid] = {};
+              recs[uid][date] = entry;
+            }
+          });
+          setRecords(recs);
+          setDataLoading(false);
+        }
+      );
+      return () => unsub();
     }
-  }, [staff]);
+  }, [authUser, userProfile]);
 
+  // 日付・スタッフ切り替え時にエントリ更新
   useEffect(() => {
-    const staffRecs = records[currentStaffId] || {};
-    const rec = staffRecs[selectedDate];
+    const rec = records[currentStaffId]?.[selectedDate];
     if (rec) {
       const copy = JSON.parse(JSON.stringify(rec));
       if (!copy.options) copy.options = [];
@@ -207,419 +436,312 @@ function App() {
     setEntry(prev => ({ ...prev, [size]: { ...prev[size], [type]: val } }));
     setSaved(false);
   };
-  const addOption = () => {
-    setEntry(prev => ({ ...prev, options: [...(prev.options||[]), { label: '', amount: '' }] }));
-    setSaved(false);
-  };
+  const addOption    = () => { setEntry(prev => ({ ...prev, options: [...(prev.options||[]), { label:'', amount:'' }] })); setSaved(false); };
   const updateOption = (idx, field, val) => {
-    if (field === 'amount' && val !== '' && !/^-?\d+$/.test(val)) return;
-    setEntry(prev => {
-      const opts = [...(prev.options||[])];
-      opts[idx] = { ...opts[idx], [field]: val };
-      return { ...prev, options: opts };
-    });
+    if (field==='amount' && val!=='' && !/^-?\d+$/.test(val)) return;
+    setEntry(prev => { const opts=[...(prev.options||[])]; opts[idx]={...opts[idx],[field]:val}; return {...prev,options:opts}; });
     setSaved(false);
   };
-  const removeOption = (idx) => {
-    setEntry(prev => ({ ...prev, options: (prev.options||[]).filter((_, i) => i !== idx) }));
-    setSaved(false);
-  };
-  const handleSave = () => {
-    const newRecs = {
-      ...records,
-      [currentStaffId]: {
-        ...(records[currentStaffId] || {}),
-        [selectedDate]: JSON.parse(JSON.stringify(entry)),
-      },
-    };
-    setRecords(newRecs);
-    saveRecords(newRecs);
-    setSaved(true);
-  };
-  const handleDelete = () => {
-    const staffRecs = records[currentStaffId] || {};
-    if (!staffRecs[selectedDate]) return;
-    const newStaffRecs = { ...staffRecs };
-    delete newStaffRecs[selectedDate];
-    const newRecs = { ...records, [currentStaffId]: newStaffRecs };
-    setRecords(newRecs);
-    saveRecords(newRecs);
-    setEntry(emptyEntry());
-    setSaved(false);
+  const removeOption = idx => { setEntry(prev => ({ ...prev, options:(prev.options||[]).filter((_,i)=>i!==idx) })); setSaved(false); };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await saveRecord(currentStaffId, selectedDate, JSON.parse(JSON.stringify(entry)));
+      setSaved(true);
+    } catch(e) {
+      alert('保存に失敗しました: ' + e.message);
+    }
+    setSaving(false);
   };
 
-  const handleSaveStaff = (newStaff) => {
-    setStaff(newStaff);
-    saveStaff(newStaff);
+  const handleDelete = async () => {
+    if (!records[currentStaffId]?.[selectedDate]) return;
+    setSaving(true);
+    try {
+      await deleteRecord(currentStaffId, selectedDate);
+      setEntry(emptyEntry());
+      setSaved(false);
+    } catch(e) {
+      alert('削除に失敗しました: ' + e.message);
+    }
+    setSaving(false);
   };
 
-  const currentStaff = staff.find(s => s.id === currentStaffId) || staff[0];
-  const currentStaffIdx = staff.findIndex(s => s.id === currentStaffId);
-  const accentColor = staffColor(currentStaffIdx);
+  const handleLogout = async () => {
+    const { auth, signOut } = window.__firebase;
+    await signOut(auth);
+  };
 
-  const currentMonth = monthKey(selectedDate);
+  // ─── ローディング ───
+  if (authUser === undefined) {
+    return <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#1A3A5C' }}>
+      <div className="spinner"/>
+    </div>;
+  }
 
-  // Month data for CURRENT staff
-  const staffRecs = records[currentStaffId] || {};
-  const monthDays = Object.entries(staffRecs)
-    .filter(([d]) => monthKey(d) === currentMonth)
-    .sort(([a],[b]) => a.localeCompare(b));
-  const monthBaseTotal   = monthDays.reduce((s,[,e]) => s + calcBaseTotal(e), 0);
-  const monthOptionTotal = monthDays.reduce((s,[,e]) => s + calcOptionTotal(e), 0);
+  // ─── 未ログイン ───
+  if (!authUser) return <LoginScreen />;
+
+  // ─── プロフィール未設定 ───
+  if (!userProfile) {
+    return <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#F2F4F7', padding:20 }}>
+      <div style={{ background:'#fff', borderRadius:16, padding:24, maxWidth:360, textAlign:'center' }}>
+        <div style={{ fontSize:32, marginBottom:12 }}>⚙️</div>
+        <div style={{ fontWeight:700, color:'#1A3A5C', marginBottom:8 }}>プロフィール未設定</div>
+        <div style={{ fontSize:13, color:'#666', marginBottom:16 }}>管理者にFirestoreへのユーザー登録を依頼してください。</div>
+        <button onClick={handleLogout} style={{ padding:'10px 24px', borderRadius:10, border:'none', background:'#EF4444', color:'#fff', fontWeight:700, cursor:'pointer' }}>ログアウト</button>
+      </div>
+    </div>;
+  }
+
+  const currentStaffObj  = allStaff.find(s => s.uid === currentStaffId) || allStaff[0];
+  const currentStaffIdx  = allStaff.findIndex(s => s.uid === currentStaffId);
+  const accentColor      = staffColor(currentStaffIdx < 0 ? 0 : currentStaffIdx);
+  const currentMonth     = monthKey(selectedDate);
+
+  const staffRecs   = records[currentStaffId] || {};
+  const monthDays   = Object.entries(staffRecs).filter(([d])=>monthKey(d)===currentMonth).sort(([a],[b])=>a.localeCompare(b));
+  const monthBaseTotal   = monthDays.reduce((s,[,e])=>s+calcBaseTotal(e),0);
+  const monthOptionTotal = monthDays.reduce((s,[,e])=>s+calcOptionTotal(e),0);
   const monthTotal       = monthBaseTotal + monthOptionTotal;
 
   const monthBreakdown = SIZES.map(size => {
-    let dc=0, da=0, pc=0, pa=0;
-    monthDays.forEach(([,e]) => {
-      const d=parseInt(e[size]?.delivery)||0, p=parseInt(e[size]?.pickup)||0;
-      dc+=d; da+=d*RATES[size].delivery; pc+=p; pa+=p*RATES[size].pickup;
-    });
-    return { size, dc, da, pc, pa };
-  }).filter(r => r.dc > 0 || r.pc > 0);
+    let dc=0,da=0,pc=0,pa=0;
+    monthDays.forEach(([,e])=>{const d=parseInt(e[size]?.delivery)||0,p=parseInt(e[size]?.pickup)||0;dc+=d;da+=d*RATES[size].delivery;pc+=p;pa+=p*RATES[size].pickup;});
+    return {size,dc,da,pc,pa};
+  }).filter(r=>r.dc>0||r.pc>0);
 
-  const monthOptions = monthDays.flatMap(([d,e]) =>
-    (e.options||[]).filter(o => o.label || o.amount)
-      .map(o => ({ date: d, label: o.label, amount: parseInt(o.amount)||0 }))
-  );
+  const monthOptions = monthDays.flatMap(([d,e])=>(e.options||[]).filter(o=>o.label||o.amount).map(o=>({date:d,label:o.label,amount:parseInt(o.amount)||0})));
 
-  // Summary across ALL staff for current month (for summary tab)
-  const allStaffMonthSummary = staff.map((s, idx) => {
-    const srecs = records[s.id] || {};
-    const days = Object.entries(srecs).filter(([d]) => monthKey(d) === currentMonth);
-    const base = days.reduce((sum, [,e]) => sum + calcBaseTotal(e), 0);
-    const opt  = days.reduce((sum, [,e]) => sum + calcOptionTotal(e), 0);
-    return { ...s, idx, base, opt, total: base + opt, dayCount: days.length };
+  const allStaffMonthSummary = allStaff.map((s,idx)=>{
+    const srecs=records[s.uid]||{};
+    const days=Object.entries(srecs).filter(([d])=>monthKey(d)===currentMonth);
+    const base=days.reduce((sum,[,e])=>sum+calcBaseTotal(e),0);
+    const opt=days.reduce((sum,[,e])=>sum+calcOptionTotal(e),0);
+    return {...s,idx,base,opt,total:base+opt,dayCount:days.length};
   });
-  const grandTotal = allStaffMonthSummary.reduce((s, r) => s + r.total, 0);
+  const grandTotal = allStaffMonthSummary.reduce((s,r)=>s+r.total,0);
 
   const baseTotal   = calcBaseTotal(entry);
   const optionTotal = calcOptionTotal(entry);
   const dayTotal    = baseTotal + optionTotal;
-  const hasDayData  = SIZES.some(s => (parseInt(entry[s]?.delivery)||0)+(parseInt(entry[s]?.pickup)||0)>0)
-    || (entry.options||[]).some(o => parseInt(o.amount)||0);
+  const hasDayData  = SIZES.some(s=>(parseInt(entry[s]?.delivery)||0)+(parseInt(entry[s]?.pickup)||0)>0)||(entry.options||[]).some(o=>parseInt(o.amount)||0);
 
-  const inputStyle = {
-    width: '100%', padding: '8px 4px', fontSize: 18, textAlign: 'center',
-    border: '1.5px solid #D0D7E3', borderRadius: 8, outline: 'none',
-    boxSizing: 'border-box', color: '#1A3A5C',
-  };
+  const inputStyle = { width:'100%', padding:'8px 4px', fontSize:18, textAlign:'center', border:'1.5px solid #D0D7E3', borderRadius:8, outline:'none', boxSizing:'border-box', color:'#1A3A5C' };
 
-  /* ─── PRINT VIEW ─── */
-  if (printView) {
-    const [y, m] = currentMonth.split('-');
-    const title = `${y}年${parseInt(m)}月　売上明細　${currentStaff?.name || ''}`;
-    return (
-      <div style={{ background: '#fff', minHeight: '100vh' }}>
-        <div className="no-print" style={{
-          position: 'sticky', top: 0, zIndex: 10, background: '#1A3A5C', color: '#fff',
-          padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <button onClick={() => setPrintView(false)} style={{
-            background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff',
-            borderRadius: 8, padding: '6px 12px', fontSize: 13, cursor: 'pointer',
-          }}>← 戻る</button>
-          <span style={{ flex: 1, fontWeight: 700, fontSize: 15 }}>印刷プレビュー</span>
-          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', textAlign: 'right', lineHeight: 1.5 }}>
-            🖨️ ブラウザの「印刷」メニューから<br/>PDF保存できます
+  // ─── 印刷ビュー ───
+  if (printView) return <PrintView
+    onBack={()=>setPrintView(false)}
+    staffName={currentStaffObj?.name||''}
+    currentMonth={currentMonth}
+    monthDays={monthDays}
+    monthBaseTotal={monthBaseTotal}
+    monthOptionTotal={monthOptionTotal}
+    monthTotal={monthTotal}
+    monthBreakdown={monthBreakdown}
+    monthOptions={monthOptions}
+  />;
+
+  // ─── タブ定義（権限による切り替え） ───
+  const tabs = isAdmin
+    ? [['input','📋 日次入力'],['month','📊 月次集計'],['all','🏆 全員集計']]
+    : [['input','📋 日次入力'],['month','📊 月次集計']];
+
+  return (
+    <div style={{ fontFamily:"'Helvetica Neue',Arial,sans-serif", background:'#F2F4F7', minHeight:'100vh', maxWidth:480, margin:'0 auto', paddingBottom:80 }}>
+
+      {showStaffModal && isAdmin && <StaffModal onClose={()=>setShowStaffModal(false)} currentUid={authUser.uid} />}
+
+      {/* ヘッダー */}
+      <div style={{ background:`linear-gradient(135deg,#1A3A5C 0%,${accentColor} 100%)`, color:'#fff', padding:'16px 16px 10px', position:'sticky', top:0, zIndex:10, boxShadow:'0 2px 8px rgba(0,0,0,0.18)' }}>
+        <div style={{ display:'flex', alignItems:'center', marginBottom:8 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:11, opacity:0.75, letterSpacing:1 }}>アートセッティングデリバリー（ASC）</div>
+            <div style={{ fontSize:18, fontWeight:700 }}>売上記録アプリ</div>
+          </div>
+          <div style={{ display:'flex', gap:6 }}>
+            {isAdmin && (
+              <button onClick={()=>setShowStaffModal(true)} style={{ background:'rgba(255,255,255,0.18)', border:'none', color:'#fff', borderRadius:8, padding:'6px 10px', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                👥
+              </button>
+            )}
+            <button onClick={handleLogout} style={{ background:'rgba(255,255,255,0.18)', border:'none', color:'#fff', borderRadius:8, padding:'6px 10px', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+              ログアウト
+            </button>
+          </div>
+        </div>
+
+        {/* ログインユーザー表示 */}
+        <div style={{ fontSize:11, opacity:0.8, marginBottom:8 }}>
+          👤 {userProfile.name}　
+          <span style={{ background: isAdmin?'rgba(255,215,0,0.3)':'rgba(255,255,255,0.15)', borderRadius:4, padding:'1px 6px', fontSize:10 }}>
+            {isAdmin ? '👑 管理者' : 'スタッフ'}
           </span>
         </div>
 
-        <div className="print-root" style={{ padding: '20px 18px', maxWidth: 680, margin: '0 auto', color: '#111' }}>
-          <div style={{ textAlign: 'center', marginBottom: 18 }}>
-            <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>アートセッティングデリバリー（ASC）</div>
-            <div style={{ fontSize: 22, fontWeight: 700, borderBottom: '2px solid #1A3A5C', paddingBottom: 8 }}>{title}</div>
+        {/* スタッフ選択（管理者のみ） */}
+        {isAdmin && allStaff.length > 1 && (
+          <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:4, marginBottom:8, scrollbarWidth:'none' }}>
+            {allStaff.map((s,idx)=>(
+              <button key={s.uid} onClick={()=>setCurrentStaffId(s.uid)} style={{
+                flexShrink:0, padding:'5px 12px', borderRadius:20, border:'2px solid',
+                borderColor: currentStaffId===s.uid?'#fff':'rgba(255,255,255,0.35)',
+                background:  currentStaffId===s.uid?'#fff':'rgba(255,255,255,0.12)',
+                color:       currentStaffId===s.uid?staffColor(idx):'#fff',
+                fontWeight:  currentStaffId===s.uid?700:400,
+                fontSize:13, cursor:'pointer', whiteSpace:'nowrap',
+              }}>{s.name}</button>
+            ))}
           </div>
+        )}
 
-          <div style={{ border: '2px solid #1A3A5C', borderRadius: 8, padding: '12px 16px', marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F0F5FF' }}>
-            <div>
-              <div style={{ fontSize: 11, color: '#555' }}>基本料金　¥{fmt(monthBaseTotal)}</div>
-              <div style={{ fontSize: 11, color: '#555' }}>オプション　{monthOptionTotal>=0?'+':''}¥{fmt(monthOptionTotal)}</div>
-              <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>{monthDays.length}日分の記録</div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11, color: '#555', marginBottom: 2 }}>月間合計（税別）</div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: '#1A3A5C' }}>¥{fmt(monthTotal)}</div>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: '#1A3A5C', borderBottom: '1.5px solid #1A3A5C', paddingBottom: 4, marginBottom: 6 }}>日別売上</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: '#1A3A5C', color: '#fff' }}>
-                  <th style={{ padding: '6px 8px', textAlign: 'left' }}>日付</th>
-                  <th style={{ padding: '6px 8px', textAlign: 'left' }}>内訳</th>
-                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>基本</th>
-                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>OP</th>
-                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>合計</th>
-                </tr>
-              </thead>
-              <tbody>
-                {monthDays.map(([d,e], i) => {
-                  const base = calcBaseTotal(e), opt = calcOptionTotal(e);
-                  const detail = SIZES.filter(s=>(parseInt(e[s]?.delivery)||0)+(parseInt(e[s]?.pickup)||0)>0)
-                    .map(s=>{const dv=parseInt(e[s]?.delivery)||0,pk=parseInt(e[s]?.pickup)||0;return[dv>0&&`${s}配${dv}`,pk>0&&`${s}集${pk}`].filter(Boolean).join(' ');}).join('　');
-                  return (
-                    <tr key={d} style={{ background: i%2===0?'#fff':'#F8FAFC', borderBottom: '1px solid #E5E7EB' }}>
-                      <td style={{ padding: '5px 8px', whiteSpace: 'nowrap' }}>{dateLabel(d)}</td>
-                      <td style={{ padding: '5px 8px', color: '#444', fontSize: 11 }}>{detail||'—'}</td>
-                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>¥{fmt(base)}</td>
-                      <td style={{ padding: '5px 8px', textAlign: 'right', color: opt!==0?'#5B4FCF':'#ccc' }}>{opt!==0?(opt>0?'+':'')+'¥'+fmt(opt):'—'}</td>
-                      <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>¥{fmt(base+opt)}</td>
-                    </tr>
-                  );
-                })}
-                <tr style={{ background: '#EEF4FF', borderTop: '2px solid #1A3A5C', fontWeight: 700 }}>
-                  <td colSpan={2} style={{ padding: '7px 8px' }}>合計</td>
-                  <td style={{ padding: '7px 8px', textAlign: 'right' }}>¥{fmt(monthBaseTotal)}</td>
-                  <td style={{ padding: '7px 8px', textAlign: 'right', color: '#5B4FCF' }}>{monthOptionTotal!==0?(monthOptionTotal>0?'+':'')+'¥'+fmt(monthOptionTotal):'—'}</td>
-                  <td style={{ padding: '7px 8px', textAlign: 'right', fontSize: 14 }}>¥{fmt(monthTotal)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {monthBreakdown.length > 0 && (
-            <div style={{ marginBottom: 18 }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: '#1A3A5C', borderBottom: '1.5px solid #1A3A5C', paddingBottom: 4, marginBottom: 6 }}>サイズ別集計</div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead>
-                  <tr style={{ background: '#1A3A5C', color: '#fff' }}>
-                    {['サイズ','配達件数','配達金額','集荷件数','集荷金額','小計'].map((h,i) => (
-                      <th key={h} style={{ padding: '6px 8px', textAlign: i===0?'left':'right' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthBreakdown.map((r,i) => (
-                    <tr key={r.size} style={{ background: i%2===0?'#fff':'#F8FAFC', borderBottom: '1px solid #E5E7EB' }}>
-                      <td style={{ padding: '5px 8px', fontWeight: 700 }}>{r.size}</td>
-                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{r.dc>0?r.dc+'件':'—'}</td>
-                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{r.da>0?'¥'+fmt(r.da):'—'}</td>
-                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{r.pc>0?r.pc+'件':'—'}</td>
-                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{r.pa>0?'¥'+fmt(r.pa):'—'}</td>
-                      <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>¥{fmt(r.da+r.pa)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {monthOptions.length > 0 && (
-            <div style={{ marginBottom: 18 }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: '#5B4FCF', borderBottom: '1.5px solid #5B4FCF', paddingBottom: 4, marginBottom: 6 }}>オプション明細</div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead>
-                  <tr style={{ background: '#5B4FCF', color: '#fff' }}>
-                    {['日付','内容','金額'].map((h,i) => (
-                      <th key={h} style={{ padding: '6px 8px', textAlign: i===2?'right':'left' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthOptions.map((o,i) => (
-                    <tr key={i} style={{ background: i%2===0?'#fff':'#F8FAFC', borderBottom: '1px solid #E5E7EB' }}>
-                      <td style={{ padding: '5px 8px', whiteSpace: 'nowrap' }}>{dateLabel(o.date)}</td>
-                      <td style={{ padding: '5px 8px' }}>{o.label||'（内容未記入）'}</td>
-                      <td style={{ padding: '5px 8px', textAlign: 'right', color: o.amount<0?'#E05252':'#5B4FCF', fontWeight: 600 }}>{o.amount>=0?'+':''}¥{fmt(o.amount)}</td>
-                    </tr>
-                  ))}
-                  <tr style={{ background: '#F3F0FF', borderTop: '2px solid #5B4FCF', fontWeight: 700 }}>
-                    <td colSpan={2} style={{ padding: '7px 8px', color: '#5B4FCF' }}>オプション合計</td>
-                    <td style={{ padding: '7px 8px', textAlign: 'right', color: monthOptionTotal<0?'#E05252':'#5B4FCF' }}>{monthOptionTotal>=0?'+':''}¥{fmt(monthOptionTotal)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <div style={{ textAlign: 'right', fontSize: 10, color: '#aaa', marginTop: 24 }}>
-            出力日：{new Date().toLocaleDateString('ja-JP')}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* ─── MAIN APP ─── */
-  return (
-    <div style={{ fontFamily: "'Helvetica Neue', Arial, sans-serif", background: '#F2F4F7', minHeight: '100vh', maxWidth: 480, margin: '0 auto', paddingBottom: 80 }}>
-
-      {showStaffModal && (
-        <StaffModal staff={staff} onClose={() => setShowStaffModal(false)} onSave={handleSaveStaff} />
-      )}
-
-      {/* Header */}
-      <div style={{ background: `linear-gradient(135deg, #1A3A5C 0%, ${accentColor} 100%)`, color: '#fff', padding: '16px 16px 10px', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.18)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, opacity: 0.75, letterSpacing: 1 }}>アートセッティングデリバリー（ASC）</div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>売上記録アプリ</div>
-          </div>
-          <button onClick={() => setShowStaffModal(true)} style={{ background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-            👥 スタッフ管理
-          </button>
-        </div>
-
-        {/* Staff selector */}
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 8, scrollbarWidth: 'none' }}>
-          {staff.map((s, idx) => (
-            <button key={s.id} onClick={() => setCurrentStaffId(s.id)} style={{
-              flexShrink: 0, padding: '5px 12px', borderRadius: 20, border: '2px solid',
-              borderColor: currentStaffId === s.id ? '#fff' : 'rgba(255,255,255,0.35)',
-              background: currentStaffId === s.id ? '#fff' : 'rgba(255,255,255,0.12)',
-              color: currentStaffId === s.id ? staffColor(idx) : '#fff',
-              fontWeight: currentStaffId === s.id ? 700 : 400,
-              fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap',
-            }}>{s.name}</button>
-          ))}
-        </div>
-
-        {/* Tab selector */}
-        <div style={{ display: 'flex', gap: 6 }}>
-          {[['input','📋 日次入力'],['month','📊 月次集計'],['all','🏆 全員集計']].map(([v,label]) => (
-            <button key={v} onClick={() => setView(v)} style={{
-              flex: 1, padding: '6px 0', borderRadius: 8, border: 'none',
-              background: view===v ? '#fff' : 'rgba(255,255,255,0.18)',
-              color: view===v ? '#1A3A5C' : '#fff',
-              fontWeight: view===v ? 700 : 400, fontSize: 12, cursor: 'pointer',
+        {/* タブ */}
+        <div style={{ display:'flex', gap:6 }}>
+          {tabs.map(([v,label])=>(
+            <button key={v} onClick={()=>setView(v)} style={{
+              flex:1, padding:'6px 0', borderRadius:8, border:'none',
+              background: view===v?'#fff':'rgba(255,255,255,0.18)',
+              color:      view===v?'#1A3A5C':'#fff',
+              fontWeight: view===v?700:400, fontSize:12, cursor:'pointer',
             }}>{label}</button>
           ))}
         </div>
       </div>
 
-      {/* ─── INPUT VIEW ─── */}
-      {view === 'input' && (
-        <div style={{ padding: '14px 12px 0' }}>
-          {/* Staff badge */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '8px 12px', background: '#fff', borderRadius: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.07)', borderLeft: `4px solid ${accentColor}` }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: accentColor }} />
-            <span style={{ fontWeight: 700, fontSize: 15, color: accentColor }}>{currentStaff?.name}</span>
-            <span style={{ fontSize: 12, color: '#888', marginLeft: 4 }}>の記録</span>
+      {/* データローディング */}
+      {dataLoading && (
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:40 }}>
+          <div className="spinner"/>
+        </div>
+      )}
+
+      {/* ─── 日次入力 ─── */}
+      {!dataLoading && view==='input' && (
+        <div style={{ padding:'14px 12px 0' }}>
+          {/* スタッフバッジ */}
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10, padding:'8px 12px', background:'#fff', borderRadius:10, boxShadow:'0 1px 4px rgba(0,0,0,0.07)', borderLeft:`4px solid ${accentColor}` }}>
+            <div style={{ width:10, height:10, borderRadius:'50%', background:accentColor }}/>
+            <span style={{ fontWeight:700, fontSize:15, color:accentColor }}>{currentStaffObj?.name}</span>
+            <span style={{ fontSize:12, color:'#888', marginLeft:4 }}>の記録</span>
           </div>
 
-          {/* Date picker */}
-          <div style={{ background: '#fff', borderRadius: 12, padding: '12px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}>
-            <span style={{ fontSize: 15 }}>📅</span>
-            <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-              style={{ border: 'none', fontSize: 16, fontWeight: 600, color: '#1A3A5C', background: 'transparent', flex: 1, outline: 'none' }} />
-            {(records[currentStaffId]||{})[selectedDate] && (
-              <span style={{ fontSize: 11, background: '#E8F5E9', color: '#388E3C', borderRadius: 6, padding: '2px 8px', fontWeight: 600 }}>保存済</span>
+          {/* 日付選択 */}
+          <div style={{ background:'#fff', borderRadius:12, padding:'12px 14px', marginBottom:12, display:'flex', alignItems:'center', gap:10, boxShadow:'0 1px 4px rgba(0,0,0,0.07)' }}>
+            <span style={{ fontSize:15 }}>📅</span>
+            <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)}
+              style={{ border:'none', fontSize:16, fontWeight:600, color:'#1A3A5C', background:'transparent', flex:1, outline:'none' }}/>
+            {records[currentStaffId]?.[selectedDate] && (
+              <span style={{ fontSize:11, background:'#E8F5E9', color:'#388E3C', borderRadius:6, padding:'2px 8px', fontWeight:600 }}>保存済</span>
             )}
           </div>
 
-          {/* Size table */}
-          <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginBottom: 12 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 1fr 1fr', background: '#1A3A5C', color: '#fff', padding: '8px 10px', fontSize: 12, fontWeight: 600, gap: 6, textAlign: 'center' }}>
+          {/* サイズ表 */}
+          <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'52px 1fr 1fr 1fr', background:'#1A3A5C', color:'#fff', padding:'8px 10px', fontSize:12, fontWeight:600, gap:6, textAlign:'center' }}>
               <div>サイズ</div>
-              <div>配達<br/><span style={{ fontWeight: 400, opacity: 0.8, fontSize: 10 }}>件数</span></div>
-              <div>集荷<br/><span style={{ fontWeight: 400, opacity: 0.8, fontSize: 10 }}>件数</span></div>
+              <div>配達<br/><span style={{ fontWeight:400, opacity:0.8, fontSize:10 }}>件数</span></div>
+              <div>集荷<br/><span style={{ fontWeight:400, opacity:0.8, fontSize:10 }}>件数</span></div>
               <div>小計</div>
             </div>
-            {SIZES.map((size, i) => {
-              const d = parseInt(entry[size]?.delivery)||0;
-              const p = parseInt(entry[size]?.pickup)||0;
-              const sub = d*RATES[size].delivery + p*RATES[size].pickup;
+            {SIZES.map((size,i)=>{
+              const d=parseInt(entry[size]?.delivery)||0, p=parseInt(entry[size]?.pickup)||0;
+              const sub=d*RATES[size].delivery+p*RATES[size].pickup;
               return (
-                <div key={size} style={{ display: 'grid', gridTemplateColumns: '52px 1fr 1fr 1fr', alignItems: 'center', gap: 6, padding: '8px 10px', background: i%2===0?'#fff':'#F8FAFC', borderBottom: '1px solid #EEF1F5' }}>
-                  <div style={{ fontWeight: 700, fontSize: 18, color: '#1A3A5C', textAlign: 'center' }}>{size}</div>
+                <div key={size} style={{ display:'grid', gridTemplateColumns:'52px 1fr 1fr 1fr', alignItems:'center', gap:6, padding:'8px 10px', background:i%2===0?'#fff':'#F8FAFC', borderBottom:'1px solid #EEF1F5' }}>
+                  <div style={{ fontWeight:700, fontSize:18, color:'#1A3A5C', textAlign:'center' }}>{size}</div>
                   <input type="number" inputMode="numeric" min="0" placeholder="0"
-                    value={entry[size]?.delivery ?? ''} onChange={e => handleChange(size,'delivery',e.target.value)}
-                    tabIndex={i+1}
-                    style={{ ...inputStyle, background: '#F5F8FF' }} />
+                    value={entry[size]?.delivery??''} onChange={e=>handleChange(size,'delivery',e.target.value)}
+                    tabIndex={i+1} style={{ ...inputStyle, background:'#F5F8FF' }}/>
                   <input type="number" inputMode="numeric" min="0" placeholder="0"
-                    value={entry[size]?.pickup ?? ''} onChange={e => handleChange(size,'pickup',e.target.value)}
-                    tabIndex={SIZES.length+i+1}
-                    style={{ ...inputStyle, background: '#FFF8F5' }} />
-                  <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 600, color: sub>0?accentColor:'#BCC3CF', paddingRight: 2 }}>
-                    {sub > 0 ? `¥${fmt(sub)}` : '—'}
+                    value={entry[size]?.pickup??''} onChange={e=>handleChange(size,'pickup',e.target.value)}
+                    tabIndex={SIZES.length+i+1} style={{ ...inputStyle, background:'#FFF8F5' }}/>
+                  <div style={{ textAlign:'right', fontSize:13, fontWeight:600, color:sub>0?accentColor:'#BCC3CF', paddingRight:2 }}>
+                    {sub>0?`¥${fmt(sub)}`:'—'}
                   </div>
                 </div>
               );
             })}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', background: '#EEF4FF', borderTop: '1.5px solid #C7D9F5' }}>
-              <span style={{ fontSize: 12, color: '#5577AA', fontWeight: 600 }}>基本料金 小計</span>
-              <span style={{ fontSize: 15, fontWeight: 700, color: accentColor }}>¥{fmt(baseTotal)}</span>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 14px', background:'#EEF4FF', borderTop:'1.5px solid #C7D9F5' }}>
+              <span style={{ fontSize:12, color:'#5577AA', fontWeight:600 }}>基本料金 小計</span>
+              <span style={{ fontSize:15, fontWeight:700, color:accentColor }}>¥{fmt(baseTotal)}</span>
             </div>
           </div>
 
-          {/* Options */}
-          <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginBottom: 12 }}>
-            <div style={{ background: '#5B4FCF', color: '#fff', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 700, fontSize: 13 }}>⭐ オプション料金</span>
-              <button onClick={addOption} style={{ background: 'rgba(255,255,255,0.22)', border: 'none', color: '#fff', borderRadius: 8, padding: '5px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>＋ 追加</button>
+          {/* オプション */}
+          <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
+            <div style={{ background:'#5B4FCF', color:'#fff', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <span style={{ fontWeight:700, fontSize:13 }}>⭐ オプション料金</span>
+              <button onClick={addOption} style={{ background:'rgba(255,255,255,0.22)', border:'none', color:'#fff', borderRadius:8, padding:'5px 12px', fontSize:13, fontWeight:700, cursor:'pointer' }}>＋ 追加</button>
             </div>
-            {(entry.options||[]).length === 0 ? (
-              <div style={{ padding: '18px 14px', textAlign: 'center', color: '#AAB0BC', fontSize: 13 }}>「＋ 追加」でオプション料金を記録できます</div>
+            {(entry.options||[]).length===0 ? (
+              <div style={{ padding:'18px 14px', textAlign:'center', color:'#AAB0BC', fontSize:13 }}>「＋ 追加」でオプション料金を記録できます</div>
             ) : (
               <div>
-                {(entry.options||[]).map((opt, idx) => (
-                  <div key={idx} style={{ padding: '10px 12px', borderBottom: '1px solid #EEF1F5', background: idx%2===0?'#fff':'#F8FAFC' }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {(entry.options||[]).map((opt,idx)=>(
+                  <div key={idx} style={{ padding:'10px 12px', borderBottom:'1px solid #EEF1F5', background:idx%2===0?'#fff':'#F8FAFC' }}>
+                    <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                       <input type="text" placeholder="内容（例：階段割増）" value={opt.label}
-                        onChange={e => updateOption(idx,'label',e.target.value)}
-                        style={{ flex: 1, padding: '8px 10px', fontSize: 14, border: '1.5px solid #D0D7E3', borderRadius: 8, outline: 'none', color: '#1A3A5C', background: '#FAFAFF', boxSizing: 'border-box' }} />
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <span style={{ fontSize: 14, color: '#666' }}>¥</span>
+                        onChange={e=>updateOption(idx,'label',e.target.value)}
+                        style={{ flex:1, padding:'8px 10px', fontSize:14, border:'1.5px solid #D0D7E3', borderRadius:8, outline:'none', color:'#1A3A5C', background:'#FAFAFF', boxSizing:'border-box' }}/>
+                      <div style={{ display:'flex', alignItems:'center', gap:2 }}>
+                        <span style={{ fontSize:14, color:'#666' }}>¥</span>
                         <input type="number" inputMode="numeric" placeholder="0" value={opt.amount}
-                          onChange={e => updateOption(idx,'amount',e.target.value)}
-                          style={{ width: 90, padding: '8px 6px', fontSize: 16, textAlign: 'right', border: '1.5px solid #D0D7E3', borderRadius: 8, outline: 'none', color: (parseInt(opt.amount)||0)<0?'#E05252':'#5B4FCF', fontWeight: 700, background: '#FAF8FF', boxSizing: 'border-box' }} />
+                          onChange={e=>updateOption(idx,'amount',e.target.value)}
+                          style={{ width:90, padding:'8px 6px', fontSize:16, textAlign:'right', border:'1.5px solid #D0D7E3', borderRadius:8, outline:'none', color:(parseInt(opt.amount)||0)<0?'#E05252':'#5B4FCF', fontWeight:700, background:'#FAF8FF', boxSizing:'border-box' }}/>
                       </div>
-                      <button onClick={() => removeOption(idx)} style={{ background: 'none', border: 'none', fontSize: 18, color: '#CCC', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>
+                      <button onClick={()=>removeOption(idx)} style={{ background:'none', border:'none', fontSize:18, color:'#CCC', cursor:'pointer', padding:'0 2px', lineHeight:1 }}>✕</button>
                     </div>
                   </div>
                 ))}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', background: '#F3F0FF', borderTop: '1.5px solid #CFC8F5' }}>
-                  <span style={{ fontSize: 12, color: '#5B4FCF', fontWeight: 600 }}>オプション 小計</span>
-                  <span style={{ fontSize: 15, fontWeight: 700, color: optionTotal<0?'#E05252':'#5B4FCF' }}>¥{fmt(optionTotal)}</span>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 14px', background:'#F3F0FF', borderTop:'1.5px solid #CFC8F5' }}>
+                  <span style={{ fontSize:12, color:'#5B4FCF', fontWeight:600 }}>オプション 小計</span>
+                  <span style={{ fontSize:15, fontWeight:700, color:optionTotal<0?'#E05252':'#5B4FCF' }}>¥{fmt(optionTotal)}</span>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Day total */}
-          <div style={{ background: `linear-gradient(135deg, #1A3A5C, ${accentColor})`, color: '#fff', borderRadius: 12, padding: '14px 16px', marginBottom: 14, boxShadow: '0 2px 8px rgba(37,99,168,0.25)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: optionTotal!==0?8:0 }}>
+          {/* 合計 */}
+          <div style={{ background:`linear-gradient(135deg,#1A3A5C,${accentColor})`, color:'#fff', borderRadius:12, padding:'14px 16px', marginBottom:14, boxShadow:`0 2px 8px rgba(37,99,168,0.25)` }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:optionTotal!==0?8:0 }}>
               <div>
-                <div style={{ fontSize: 11, opacity: 0.75 }}>本日合計（税別）</div>
-                <div style={{ fontSize: 11, opacity: 0.6 }}>{selectedDate===today()?'今日':dateLabel(selectedDate)}</div>
+                <div style={{ fontSize:11, opacity:0.75 }}>本日合計（税別）</div>
+                <div style={{ fontSize:11, opacity:0.6 }}>{selectedDate===today()?'今日':dateLabel(selectedDate)}</div>
               </div>
-              <div style={{ fontSize: 26, fontWeight: 700 }}>¥{fmt(dayTotal)}</div>
+              <div style={{ fontSize:26, fontWeight:700 }}>¥{fmt(dayTotal)}</div>
             </div>
-            {optionTotal !== 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.75, borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 6 }}>
+            {optionTotal!==0&&(
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, opacity:0.75, borderTop:'1px solid rgba(255,255,255,0.2)', paddingTop:6 }}>
                 <span>基本 ¥{fmt(baseTotal)}</span>
                 <span>オプション {optionTotal>=0?'+':''}¥{fmt(optionTotal)}</span>
               </div>
             )}
           </div>
 
-          {/* Buttons */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-            <button onClick={handleSave} disabled={!hasDayData} style={{
-              flex: 1, padding: '14px', borderRadius: 12, border: 'none',
-              background: hasDayData?accentColor:'#BCC3CF', color: '#fff',
-              fontSize: 16, fontWeight: 700, cursor: hasDayData?'pointer':'not-allowed',
+          {/* ボタン */}
+          <div style={{ display:'flex', gap:10, marginBottom:10 }}>
+            <button onClick={handleSave} disabled={!hasDayData||saving} style={{
+              flex:1, padding:'14px', borderRadius:12, border:'none',
+              background: hasDayData&&!saving?accentColor:'#BCC3CF', color:'#fff',
+              fontSize:16, fontWeight:700, cursor:hasDayData&&!saving?'pointer':'not-allowed',
               boxShadow: hasDayData?`0 2px 8px ${accentColor}55`:'none',
-            }}>{saved ? '✅ 保存済み' : '💾 保存する'}</button>
-            {(records[currentStaffId]||{})[selectedDate] && (
-              <button onClick={handleDelete} style={{ padding: '14px 16px', borderRadius: 12, border: '1.5px solid #EF4444', background: '#fff', color: '#EF4444', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>🗑️</button>
+            }}>{saving?'保存中...':saved?'✅ 保存済み':'💾 保存する'}</button>
+            {records[currentStaffId]?.[selectedDate]&&(
+              <button onClick={handleDelete} disabled={saving} style={{ padding:'14px 16px', borderRadius:12, border:'1.5px solid #EF4444', background:'#fff', color:'#EF4444', fontSize:14, fontWeight:600, cursor:'pointer' }}>🗑️</button>
             )}
           </div>
 
-          {/* Rate reference */}
-          <details style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginBottom: 12 }}>
-            <summary style={{ padding: '12px 14px', fontWeight: 600, color: '#1A3A5C', cursor: 'pointer', fontSize: 13 }}>📋 単価表を確認する</summary>
-            <div style={{ padding: '0 10px 10px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4, textAlign: 'center', fontSize: 12 }}>
-                {['サイズ','配達','集荷'].map(h => (
-                  <div key={h} style={{ fontWeight: 700, color: '#888', padding: '6px 0', borderBottom: '1px solid #eee' }}>{h}</div>
-                ))}
-                {SIZES.map((s,i) => [
-                  <div key={s+'n'} style={{ padding: '5px 0', background: i%2?'#F8FAFC':'#fff', fontWeight: 600 }}>{s}</div>,
-                  <div key={s+'d'} style={{ padding: '5px 0', background: i%2?'#F8FAFC':'#fff', color: '#2563A8' }}>¥{fmt(RATES[s].delivery)}</div>,
-                  <div key={s+'p'} style={{ padding: '5px 0', background: i%2?'#F8FAFC':'#fff', color: '#E07B39' }}>¥{fmt(RATES[s].pickup)}</div>,
+          {/* 単価表 */}
+          <details style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
+            <summary style={{ padding:'12px 14px', fontWeight:600, color:'#1A3A5C', cursor:'pointer', fontSize:13 }}>📋 単価表を確認する</summary>
+            <div style={{ padding:'0 10px 10px' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:4, textAlign:'center', fontSize:12 }}>
+                {['サイズ','配達','集荷'].map(h=><div key={h} style={{ fontWeight:700, color:'#888', padding:'6px 0', borderBottom:'1px solid #eee' }}>{h}</div>)}
+                {SIZES.map((s,i)=>[
+                  <div key={s+'n'} style={{ padding:'5px 0', background:i%2?'#F8FAFC':'#fff', fontWeight:600 }}>{s}</div>,
+                  <div key={s+'d'} style={{ padding:'5px 0', background:i%2?'#F8FAFC':'#fff', color:'#2563A8' }}>¥{fmt(RATES[s].delivery)}</div>,
+                  <div key={s+'p'} style={{ padding:'5px 0', background:i%2?'#F8FAFC':'#fff', color:'#E07B39' }}>¥{fmt(RATES[s].pickup)}</div>,
                 ])}
               </div>
             </div>
@@ -627,195 +749,172 @@ function App() {
         </div>
       )}
 
-      {/* ─── MONTH VIEW (individual) ─── */}
-      {view === 'month' && (
-        <div style={{ padding: '14px 12px 0' }}>
-          {/* Staff badge */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '8px 12px', background: '#fff', borderRadius: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.07)', borderLeft: `4px solid ${accentColor}` }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: accentColor }} />
-            <span style={{ fontWeight: 700, fontSize: 15, color: accentColor }}>{currentStaff?.name}</span>
-            <span style={{ fontSize: 12, color: '#888', marginLeft: 4 }}>の月次集計</span>
+      {/* ─── 月次集計 ─── */}
+      {!dataLoading && view==='month' && (
+        <div style={{ padding:'14px 12px 0' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10, padding:'8px 12px', background:'#fff', borderRadius:10, boxShadow:'0 1px 4px rgba(0,0,0,0.07)', borderLeft:`4px solid ${accentColor}` }}>
+            <div style={{ width:10, height:10, borderRadius:'50%', background:accentColor }}/>
+            <span style={{ fontWeight:700, fontSize:15, color:accentColor }}>{currentStaffObj?.name}</span>
+            <span style={{ fontSize:12, color:'#888', marginLeft:4 }}>の月次集計</span>
           </div>
-
-          {/* Month selector */}
-          <div style={{ background: '#fff', borderRadius: 12, padding: '12px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}>
-            <span style={{ fontSize: 15 }}>📅</span>
-            <input type="month" value={currentMonth} onChange={e => setSelectedDate(e.target.value+'-01')}
-              style={{ border: 'none', fontSize: 16, fontWeight: 600, color: '#1A3A5C', background: 'transparent', flex: 1, outline: 'none' }} />
-            <button onClick={() => monthDays.length > 0 && setPrintView(true)} disabled={monthDays.length===0}
-              style={{ padding: '8px 12px', borderRadius: 8, border: 'none', background: monthDays.length>0?'#D97706':'#BCC3CF', color: '#fff', fontSize: 13, fontWeight: 700, cursor: monthDays.length>0?'pointer':'not-allowed', whiteSpace: 'nowrap' }}>
+          <div style={{ background:'#fff', borderRadius:12, padding:'12px 14px', marginBottom:12, display:'flex', alignItems:'center', gap:10, boxShadow:'0 1px 4px rgba(0,0,0,0.07)' }}>
+            <span style={{ fontSize:15 }}>📅</span>
+            <input type="month" value={currentMonth} onChange={e=>setSelectedDate(e.target.value+'-01')}
+              style={{ border:'none', fontSize:16, fontWeight:600, color:'#1A3A5C', background:'transparent', flex:1, outline:'none' }}/>
+            <button onClick={()=>monthDays.length>0&&setPrintView(true)} disabled={monthDays.length===0}
+              style={{ padding:'8px 12px', borderRadius:8, border:'none', background:monthDays.length>0?'#D97706':'#BCC3CF', color:'#fff', fontSize:13, fontWeight:700, cursor:monthDays.length>0?'pointer':'not-allowed', whiteSpace:'nowrap' }}>
               🖨️ 印刷
             </button>
           </div>
-
-          {/* Month total */}
-          <div style={{ background: `linear-gradient(135deg, #1A3A5C, ${accentColor})`, color: '#fff', borderRadius: 14, padding: '18px', marginBottom: 14, boxShadow: '0 3px 12px rgba(37,99,168,0.28)' }}>
-            <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 4 }}>{monthLabel(currentMonth)} 合計売上（税別）</div>
-            <div style={{ fontSize: 32, fontWeight: 700, marginBottom: 8 }}>¥{fmt(monthTotal)}</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, opacity: 0.8, borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 8 }}>
+          <div style={{ background:`linear-gradient(135deg,#1A3A5C,${accentColor})`, color:'#fff', borderRadius:14, padding:'18px', marginBottom:14, boxShadow:'0 3px 12px rgba(37,99,168,0.28)' }}>
+            <div style={{ fontSize:12, opacity:0.75, marginBottom:4 }}>{monthLabel(currentMonth)} 合計売上（税別）</div>
+            <div style={{ fontSize:32, fontWeight:700, marginBottom:8 }}>¥{fmt(monthTotal)}</div>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, opacity:0.8, borderTop:'1px solid rgba(255,255,255,0.2)', paddingTop:8 }}>
               <span>基本料金　¥{fmt(monthBaseTotal)}</span>
               <span>オプション　{monthOptionTotal>=0?'+':''}¥{fmt(monthOptionTotal)}</span>
             </div>
-            <div style={{ fontSize: 11, opacity: 0.65, marginTop: 4 }}>{monthDays.length}日分の記録</div>
+            <div style={{ fontSize:11, opacity:0.65, marginTop:4 }}>{monthDays.length}日分の記録</div>
           </div>
-
-          {/* Size breakdown */}
-          {monthBreakdown.length > 0 && (
-            <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginBottom: 12 }}>
-              <div style={{ background: '#1A3A5C', color: '#fff', padding: '10px 14px', fontSize: 13, fontWeight: 700 }}>サイズ別集計</div>
-              {monthBreakdown.map((r,i) => (
-                <div key={r.size} style={{ padding: '10px 14px', background: i%2?'#F8FAFC':'#fff', borderBottom: '1px solid #EEF1F5' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <span style={{ fontWeight: 700, fontSize: 16, color: '#1A3A5C' }}>サイズ {r.size}</span>
-                    <span style={{ fontWeight: 700, fontSize: 15, color: accentColor }}>¥{fmt(r.da+r.pa)}</span>
+          {monthBreakdown.length>0&&(
+            <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
+              <div style={{ background:'#1A3A5C', color:'#fff', padding:'10px 14px', fontSize:13, fontWeight:700 }}>サイズ別集計</div>
+              {monthBreakdown.map((r,i)=>(
+                <div key={r.size} style={{ padding:'10px 14px', background:i%2?'#F8FAFC':'#fff', borderBottom:'1px solid #EEF1F5' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                    <span style={{ fontWeight:700, fontSize:16, color:'#1A3A5C' }}>サイズ {r.size}</span>
+                    <span style={{ fontWeight:700, fontSize:15, color:accentColor }}>¥{fmt(r.da+r.pa)}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 14, fontSize: 12, color: '#666' }}>
-                    {r.dc > 0 && <span>🚚 配達 {r.dc}件 ¥{fmt(r.da)}</span>}
-                    {r.pc > 0 && <span>📦 集荷 {r.pc}件 ¥{fmt(r.pa)}</span>}
+                  <div style={{ display:'flex', gap:14, fontSize:12, color:'#666' }}>
+                    {r.dc>0&&<span>🚚 配達 {r.dc}件 ¥{fmt(r.da)}</span>}
+                    {r.pc>0&&<span>📦 集荷 {r.pc}件 ¥{fmt(r.pa)}</span>}
                   </div>
                 </div>
               ))}
             </div>
           )}
-
-          {/* Month options */}
-          {monthOptions.length > 0 && (
-            <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginBottom: 12 }}>
-              <div style={{ background: '#5B4FCF', color: '#fff', padding: '10px 14px', fontSize: 13, fontWeight: 700 }}>⭐ オプション明細</div>
-              {monthOptions.map((o,i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 14px', background: i%2?'#F8FAFC':'#fff', borderBottom: '1px solid #EEF1F5' }}>
+          {monthOptions.length>0&&(
+            <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
+              <div style={{ background:'#5B4FCF', color:'#fff', padding:'10px 14px', fontSize:13, fontWeight:700 }}>⭐ オプション明細</div>
+              {monthOptions.map((o,i)=>(
+                <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'9px 14px', background:i%2?'#F8FAFC':'#fff', borderBottom:'1px solid #EEF1F5' }}>
                   <div>
-                    <div style={{ fontSize: 13, color: '#1A3A5C', fontWeight: o.label?500:400 }}>{o.label||'（内容未記入）'}</div>
-                    <div style={{ fontSize: 11, color: '#AAB0BC' }}>{dateLabel(o.date)}</div>
+                    <div style={{ fontSize:13, color:'#1A3A5C' }}>{o.label||'（内容未記入）'}</div>
+                    <div style={{ fontSize:11, color:'#AAB0BC' }}>{dateLabel(o.date)}</div>
                   </div>
-                  <div style={{ fontWeight: 700, color: o.amount<0?'#E05252':'#5B4FCF', fontSize: 14 }}>{o.amount>=0?'+':''}¥{fmt(o.amount)}</div>
+                  <div style={{ fontWeight:700, color:o.amount<0?'#E05252':'#5B4FCF', fontSize:14 }}>{o.amount>=0?'+':''}¥{fmt(o.amount)}</div>
                 </div>
               ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 14px', background: '#F3F0FF', borderTop: '1.5px solid #CFC8F5' }}>
-                <span style={{ fontWeight: 700, color: '#5B4FCF', fontSize: 13 }}>オプション合計</span>
-                <span style={{ fontWeight: 700, color: monthOptionTotal<0?'#E05252':'#5B4FCF', fontSize: 15 }}>{monthOptionTotal>=0?'+':''}¥{fmt(monthOptionTotal)}</span>
+              <div style={{ display:'flex', justifyContent:'space-between', padding:'9px 14px', background:'#F3F0FF', borderTop:'1.5px solid #CFC8F5' }}>
+                <span style={{ fontWeight:700, color:'#5B4FCF', fontSize:13 }}>オプション合計</span>
+                <span style={{ fontWeight:700, color:monthOptionTotal<0?'#E05252':'#5B4FCF', fontSize:15 }}>{monthOptionTotal>=0?'+':''}¥{fmt(monthOptionTotal)}</span>
               </div>
             </div>
           )}
-
-          {/* Daily list */}
-          {monthDays.length > 0 ? (
-            <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginBottom: 12 }}>
-              <div style={{ background: '#1A3A5C', color: '#fff', padding: '10px 14px', fontSize: 13, fontWeight: 700 }}>日別売上</div>
-              {monthDays.map(([d,e],i) => {
-                const t = calcDayTotal(e);
-                const hasOpt = (e.options||[]).some(o => parseInt(o.amount)||0);
+          {monthDays.length>0?(
+            <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
+              <div style={{ background:'#1A3A5C', color:'#fff', padding:'10px 14px', fontSize:13, fontWeight:700 }}>日別売上</div>
+              {monthDays.map(([d,e],i)=>{
+                const t=calcDayTotal(e), hasOpt=(e.options||[]).some(o=>parseInt(o.amount)||0);
                 return (
-                  <div key={d} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', background: i%2?'#F8FAFC':'#fff', borderBottom: '1px solid #EEF1F5', cursor: 'pointer' }}
-                    onClick={() => { setSelectedDate(d); setView('input'); }}>
+                  <div key={d} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'11px 14px', background:i%2?'#F8FAFC':'#fff', borderBottom:'1px solid #EEF1F5', cursor:'pointer' }}
+                    onClick={()=>{setSelectedDate(d);setView('input');}}>
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: 14, color: '#1A3A5C' }}>
+                      <div style={{ fontWeight:600, fontSize:14, color:'#1A3A5C' }}>
                         {dateLabel(d)}
-                        {hasOpt && <span style={{ marginLeft: 6, fontSize: 10, background: '#EDE9FF', color: '#5B4FCF', borderRadius: 4, padding: '1px 5px', fontWeight: 600 }}>OP</span>}
+                        {hasOpt&&<span style={{ marginLeft:6, fontSize:10, background:'#EDE9FF', color:'#5B4FCF', borderRadius:4, padding:'1px 5px', fontWeight:600 }}>OP</span>}
                       </div>
-                      <div style={{ fontSize: 11, color: '#999', marginTop: 1 }}>
+                      <div style={{ fontSize:11, color:'#999', marginTop:1 }}>
                         {SIZES.filter(s=>(parseInt(e[s]?.delivery)||0)+(parseInt(e[s]?.pickup)||0)>0)
                           .map(s=>{const d2=parseInt(e[s]?.delivery)||0,p=parseInt(e[s]?.pickup)||0;return[d2>0&&`${s}配${d2}`,p>0&&`${s}集${p}`].filter(Boolean).join(' ');})
                           .filter(Boolean).join('　')}
                       </div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontWeight: 700, color: accentColor, fontSize: 15 }}>¥{fmt(t)}</div>
-                      <div style={{ fontSize: 10, color: '#aaa' }}>編集 ›</div>
+                    <div style={{ textAlign:'right' }}>
+                      <div style={{ fontWeight:700, color:accentColor, fontSize:15 }}>¥{fmt(t)}</div>
+                      <div style={{ fontSize:10, color:'#aaa' }}>編集 ›</div>
                     </div>
                   </div>
                 );
               })}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 14px', background: '#EEF4FF', borderTop: '2px solid #2563A8' }}>
-                <div style={{ fontWeight: 700, color: '#1A3A5C' }}>月合計</div>
-                <div style={{ fontWeight: 800, fontSize: 18, color: '#1A3A5C' }}>¥{fmt(monthTotal)}</div>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'13px 14px', background:'#EEF4FF', borderTop:'2px solid #2563A8' }}>
+                <div style={{ fontWeight:700, color:'#1A3A5C' }}>月合計</div>
+                <div style={{ fontWeight:800, fontSize:18, color:'#1A3A5C' }}>¥{fmt(monthTotal)}</div>
               </div>
             </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#AAB0BC' }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
-              <div style={{ fontWeight: 600 }}>この月の記録はまだありません</div>
-              <div style={{ fontSize: 13, marginTop: 6 }}>「日次入力」タブから記録を追加しましょう</div>
+          ):(
+            <div style={{ textAlign:'center', padding:'40px 20px', color:'#AAB0BC' }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>📭</div>
+              <div style={{ fontWeight:600 }}>この月の記録はまだありません</div>
+              <div style={{ fontSize:13, marginTop:6 }}>「日次入力」タブから記録を追加しましょう</div>
             </div>
           )}
         </div>
       )}
 
-      {/* ─── ALL STAFF SUMMARY ─── */}
-      {view === 'all' && (
-        <div style={{ padding: '14px 12px 0' }}>
-          {/* Month selector */}
-          <div style={{ background: '#fff', borderRadius: 12, padding: '12px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}>
-            <span style={{ fontSize: 15 }}>📅</span>
-            <input type="month" value={currentMonth} onChange={e => setSelectedDate(e.target.value+'-01')}
-              style={{ border: 'none', fontSize: 16, fontWeight: 600, color: '#1A3A5C', background: 'transparent', flex: 1, outline: 'none' }} />
+      {/* ─── 全員集計（管理者のみ） ─── */}
+      {!dataLoading && view==='all' && isAdmin && (
+        <div style={{ padding:'14px 12px 0' }}>
+          <div style={{ background:'#fff', borderRadius:12, padding:'12px 14px', marginBottom:12, display:'flex', alignItems:'center', gap:10, boxShadow:'0 1px 4px rgba(0,0,0,0.07)' }}>
+            <span style={{ fontSize:15 }}>📅</span>
+            <input type="month" value={currentMonth} onChange={e=>setSelectedDate(e.target.value+'-01')}
+              style={{ border:'none', fontSize:16, fontWeight:600, color:'#1A3A5C', background:'transparent', flex:1, outline:'none' }}/>
           </div>
-
-          {/* Grand total */}
-          <div style={{ background: 'linear-gradient(135deg, #1A3A5C, #2563A8)', color: '#fff', borderRadius: 14, padding: '18px', marginBottom: 14, boxShadow: '0 3px 12px rgba(37,99,168,0.28)' }}>
-            <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 4 }}>{monthLabel(currentMonth)} 全スタッフ合計（税別）</div>
-            <div style={{ fontSize: 32, fontWeight: 700, marginBottom: 4 }}>¥{fmt(grandTotal)}</div>
-            <div style={{ fontSize: 11, opacity: 0.65 }}>{staff.length}名のスタッフ</div>
+          <div style={{ background:'linear-gradient(135deg,#1A3A5C,#2563A8)', color:'#fff', borderRadius:14, padding:'18px', marginBottom:14, boxShadow:'0 3px 12px rgba(37,99,168,0.28)' }}>
+            <div style={{ fontSize:12, opacity:0.75, marginBottom:4 }}>{monthLabel(currentMonth)} 全スタッフ合計（税別）</div>
+            <div style={{ fontSize:32, fontWeight:700, marginBottom:4 }}>¥{fmt(grandTotal)}</div>
+            <div style={{ fontSize:11, opacity:0.65 }}>{allStaff.length}名のスタッフ</div>
           </div>
-
-          {/* Per-staff cards */}
-          {allStaffMonthSummary.map((s, i) => (
-            <div key={s.id} style={{ background: '#fff', borderRadius: 12, padding: '14px', marginBottom: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.07)', borderLeft: `4px solid ${staffColor(s.idx)}`, cursor: 'pointer' }}
-              onClick={() => { setCurrentStaffId(s.id); setView('month'); }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: s.dayCount > 0 ? 8 : 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: staffColor(s.idx) }} />
-                  <span style={{ fontWeight: 700, fontSize: 16, color: '#1A3A5C' }}>{s.name}</span>
-                  {s.dayCount > 0 && <span style={{ fontSize: 11, color: '#888' }}>{s.dayCount}日</span>}
+          {allStaffMonthSummary.map((s,i)=>(
+            <div key={s.uid} style={{ background:'#fff', borderRadius:12, padding:'14px', marginBottom:10, boxShadow:'0 1px 4px rgba(0,0,0,0.07)', borderLeft:`4px solid ${staffColor(s.idx)}`, cursor:'pointer' }}
+              onClick={()=>{setCurrentStaffId(s.uid);setView('month');}}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:s.dayCount>0?8:0 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <div style={{ width:10, height:10, borderRadius:'50%', background:staffColor(s.idx) }}/>
+                  <span style={{ fontWeight:700, fontSize:16, color:'#1A3A5C' }}>{s.name}</span>
+                  {s.dayCount>0&&<span style={{ fontSize:11, color:'#888' }}>{s.dayCount}日</span>}
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: 800, fontSize: 20, color: staffColor(s.idx) }}>
-                    {s.total > 0 ? `¥${fmt(s.total)}` : <span style={{ color: '#CCC', fontSize: 15 }}>記録なし</span>}
+                <div style={{ textAlign:'right' }}>
+                  <div style={{ fontWeight:800, fontSize:20, color:staffColor(s.idx) }}>
+                    {s.total>0?`¥${fmt(s.total)}`:<span style={{ color:'#CCC', fontSize:15 }}>記録なし</span>}
                   </div>
                 </div>
               </div>
-              {s.dayCount > 0 && (
-                <div style={{ display: 'flex', gap: 14, fontSize: 12, color: '#888', borderTop: '1px solid #EEF1F5', paddingTop: 6 }}>
+              {s.dayCount>0&&(
+                <div style={{ display:'flex', gap:14, fontSize:12, color:'#888', borderTop:'1px solid #EEF1F5', paddingTop:6 }}>
                   <span>基本 ¥{fmt(s.base)}</span>
-                  {s.opt !== 0 && <span>オプション {s.opt>=0?'+':''}¥{fmt(s.opt)}</span>}
-                  <span style={{ marginLeft: 'auto', color: '#aaa', fontSize: 11 }}>詳細 ›</span>
+                  {s.opt!==0&&<span>オプション {s.opt>=0?'+':''}¥{fmt(s.opt)}</span>}
+                  <span style={{ marginLeft:'auto', color:'#aaa', fontSize:11 }}>詳細 ›</span>
                 </div>
               )}
             </div>
           ))}
-
-          {/* Ranking */}
-          {allStaffMonthSummary.some(s => s.total > 0) && (
-            <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginBottom: 12 }}>
-              <div style={{ background: '#D97706', color: '#fff', padding: '10px 14px', fontSize: 13, fontWeight: 700 }}>🏆 今月のランキング</div>
-              {[...allStaffMonthSummary]
-                .filter(s => s.total > 0)
-                .sort((a, b) => b.total - a.total)
-                .map((s, rank) => (
-                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: rank%2?'#F8FAFC':'#fff', borderBottom: '1px solid #EEF1F5' }}>
-                    <div style={{ fontSize: rank===0?22:16, fontWeight: 700, width: 28, textAlign: 'center' }}>
-                      {rank===0?'🥇':rank===1?'🥈':rank===2?'🥉':`${rank+1}`}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: '#1A3A5C' }}>{s.name}</div>
-                      <div style={{ fontSize: 11, color: '#888' }}>{s.dayCount}日稼働</div>
-                    </div>
-                    <div style={{ fontWeight: 800, fontSize: 16, color: staffColor(s.idx) }}>¥{fmt(s.total)}</div>
+          {allStaffMonthSummary.some(s=>s.total>0)&&(
+            <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
+              <div style={{ background:'#D97706', color:'#fff', padding:'10px 14px', fontSize:13, fontWeight:700 }}>🏆 今月のランキング</div>
+              {[...allStaffMonthSummary].filter(s=>s.total>0).sort((a,b)=>b.total-a.total).map((s,rank)=>(
+                <div key={s.uid} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 14px', background:rank%2?'#F8FAFC':'#fff', borderBottom:'1px solid #EEF1F5' }}>
+                  <div style={{ fontSize:rank===0?22:16, fontWeight:700, width:28, textAlign:'center' }}>
+                    {rank===0?'🥇':rank===1?'🥈':rank===2?'🥉':`${rank+1}`}
                   </div>
-                ))}
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:14, color:'#1A3A5C' }}>{s.name}</div>
+                    <div style={{ fontSize:11, color:'#888' }}>{s.dayCount}日稼働</div>
+                  </div>
+                  <div style={{ fontWeight:800, fontSize:16, color:staffColor(s.idx) }}>¥{fmt(s.total)}</div>
+                </div>
+              ))}
             </div>
           )}
-
-          {allStaffMonthSummary.every(s => s.total === 0) && (
-            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#AAB0BC' }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
-              <div style={{ fontWeight: 600 }}>この月の記録はまだありません</div>
+          {allStaffMonthSummary.every(s=>s.total===0)&&(
+            <div style={{ textAlign:'center', padding:'40px 20px', color:'#AAB0BC' }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>📭</div>
+              <div style={{ fontWeight:600 }}>この月の記録はまだありません</div>
             </div>
           )}
         </div>
       )}
 
-      <div style={{ height: 20 }} />
+      <div style={{ height:20 }}/>
     </div>
   );
 }
