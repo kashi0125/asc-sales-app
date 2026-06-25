@@ -114,6 +114,29 @@ async function deleteRecord(uid, date) {
   await deleteDoc(doc(db, 'records', `${uid}_${date}`));
 }
 
+// ─── 画像圧縮ユーティリティ ───
+function compressImage(file, maxPx=1200, quality=0.80) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 // ─── ログイン・新規登録画面 ───
 function LoginScreen() {
   const [mode, setMode]         = useState('login'); // 'login' | 'register'
@@ -749,6 +772,8 @@ function App() {
   const [entry, setEntry]                 = useState(emptyEntry());
   const [saved, setSaved]                 = useState(false);
   const [saving, setSaving]               = useState(false);
+  const [imageData, setImageData]         = useState(null);  // 現在表示中の画像base64
+  const [imageUploading, setImageUploading] = useState(false);
   const [printView, setPrintView]         = useState(false);
   const [showStaffModal, setShowStaffModal]   = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
@@ -838,8 +863,10 @@ function App() {
       const copy = JSON.parse(JSON.stringify(rec));
       if (!copy.options) copy.options = [];
       setEntry(copy);
+      setImageData(copy.image || null);
     } else {
       setEntry(emptyEntry());
+      setImageData(null);
     }
     setSaved(false);
   }, [selectedDate, records, currentStaffId]);
@@ -860,12 +887,35 @@ function App() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await saveRecord(currentStaffId, selectedDate, JSON.parse(JSON.stringify(entry)));
+      const entryToSave = JSON.parse(JSON.stringify(entry));
+      if (imageData) entryToSave.image = imageData;
+      await saveRecord(currentStaffId, selectedDate, entryToSave);
       setSaved(true);
     } catch(e) {
       alert('保存に失敗しました: ' + e.message);
     }
     setSaving(false);
+  };
+
+  const handleImageSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImageUploading(true);
+    try {
+      const compressed = await compressImage(file);
+      setImageData(compressed);
+      setSaved(false);
+    } catch(err) {
+      alert('画像の読み込みに失敗しました');
+    }
+    setImageUploading(false);
+    e.target.value = '';
+  };
+
+  const handleImageDelete = () => {
+    if (!window.confirm('画像を削除しますか？')) return;
+    setImageData(null);
+    setSaved(false);
   };
 
   const handleDelete = async () => {
@@ -1138,6 +1188,45 @@ function App() {
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, opacity:0.75, borderTop:'1px solid rgba(255,255,255,0.2)', paddingTop:6 }}>
                 <span>基本 ¥{fmt(baseTotal)}</span>
                 <span>オプション {optionTotal>=0?'+':''}¥{fmt(optionTotal)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* 画像添付フォーム */}
+          <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
+            <div style={{ background:'#374151', color:'#fff', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <span style={{ fontWeight:700, fontSize:13 }}>📎 書類画像</span>
+              {!imageData && (
+                <label style={{ background:'rgba(255,255,255,0.22)', borderRadius:8, padding:'5px 12px', fontSize:13, fontWeight:700, cursor:'pointer', color:'#fff' }}>
+                  {imageUploading ? '処理中...' : '＋ 画像を追加'}
+                  <input type="file" accept="image/*" onChange={handleImageSelect} style={{ display:'none' }} disabled={imageUploading} />
+                </label>
+              )}
+            </div>
+            {imageData ? (
+              <div style={{ padding:12 }}>
+                <img src={imageData} alt="添付画像" style={{ width:'100%', borderRadius:8, display:'block', marginBottom:10 }} />
+                <div style={{ display:'flex', gap:8 }}>
+                  <label style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'10px', borderRadius:10, border:'1.5px solid #D0D7E3', background:'#F8FAFC', fontSize:13, fontWeight:600, color:'#555', cursor:'pointer' }}>
+                    🔄 画像を変更
+                    <input type="file" accept="image/*" onChange={handleImageSelect} style={{ display:'none' }} disabled={imageUploading} />
+                  </label>
+                  <button onClick={handleImageDelete} style={{ flex:1, padding:'10px', borderRadius:10, border:'1.5px solid #FCA5A5', background:'#fff', color:'#EF4444', fontSize:13, fontWeight:600, cursor:'pointer' }}>
+                    🗑️ 画像を削除
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding:'20px 14px', textAlign:'center', color:'#AAB0BC', fontSize:13 }}>
+                {imageUploading ? (
+                  <div><div className="spinner" style={{ margin:'0 auto 8px' }}/><div>圧縮・処理中...</div></div>
+                ) : (
+                  <div>
+                    <div style={{ fontSize:32, marginBottom:8 }}>📷</div>
+                    <div>「＋ 画像を追加」で書類の写真を添付できます</div>
+                    <div style={{ fontSize:11, color:'#BCC3CF', marginTop:4 }}>自動で圧縮して保存されます</div>
+                  </div>
+                )}
               </div>
             )}
           </div>
