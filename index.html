@@ -135,6 +135,20 @@ function LoginScreen() {
     setLoading(false);
   };
 
+  const handleResetPassword = async () => {
+    if (!email.trim()) { setError('メールアドレスを入力してください'); return; }
+    setLoading(true); setError('');
+    try {
+      const { auth } = getFirebase();
+      const { sendPasswordResetEmail } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+      await sendPasswordResetEmail(auth, email.trim());
+      setMode('resetDone');
+    } catch(e) {
+      setError('送信に失敗しました。メールアドレスを確認してください');
+    }
+    setLoading(false);
+  };
+
   const handleRegister = async () => {
     if (!email || !password || !name.trim()) { setError('すべての項目を入力してください'); return; }
     if (password.length < 6) { setError('パスワードは6文字以上にしてください'); return; }
@@ -171,6 +185,25 @@ function LoginScreen() {
         <div style={{ fontSize:13, color:'#666', marginBottom:24 }}>アカウントが作成されました。<br/>そのままログインできます。</div>
         <button onClick={()=>switchMode('login')} style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'#1A3A5C', color:'#fff', fontSize:16, fontWeight:700, cursor:'pointer' }}>
           ログイン画面へ
+        </button>
+      </div>
+    </div>
+  );
+
+  // パスワードリセットメール送信完了画面
+  if (mode === 'resetDone') return (
+    <div style={{ minHeight:'100vh', background:'linear-gradient(135deg,#1A3A5C 0%,#2563A8 100%)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+      <div style={{ background:'#fff', borderRadius:20, padding:'32px 24px', width:'100%', maxWidth:380, textAlign:'center' }}>
+        <div style={{ fontSize:48, marginBottom:16 }}>📧</div>
+        <div style={{ fontSize:20, fontWeight:800, color:'#1A3A5C', marginBottom:8 }}>メールを送信しました</div>
+        <div style={{ fontSize:13, color:'#666', marginBottom:8, lineHeight:1.7 }}>
+          <b>{email}</b> 宛に<br/>パスワードリセット用のリンクを送信しました。
+        </div>
+        <div style={{ fontSize:12, color:'#888', marginBottom:24, lineHeight:1.7 }}>
+          メールが届かない場合は迷惑メールフォルダをご確認ください。
+        </div>
+        <button onClick={()=>switchMode('login')} style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'#1A3A5C', color:'#fff', fontSize:16, fontWeight:700, cursor:'pointer' }}>
+          ログイン画面に戻る
         </button>
       </div>
     </div>
@@ -214,28 +247,190 @@ function LoginScreen() {
             style={{ width:'100%', padding:'12px 14px', fontSize:15, border:'1.5px solid #D0D7E3', borderRadius:10, outline:'none', color:'#1A3A5C' }}
           />
         </div>
-        <div style={{ marginBottom:20 }}>
-          <div style={{ fontSize:12, color:'#555', marginBottom:6, fontWeight:600 }}>パスワード{mode==='register'&&<span style={{ color:'#888', fontWeight:400 }}>（6文字以上）</span>}</div>
-          <input type="password" value={password} onChange={e=>setPassword(e.target.value)}
-            onKeyDown={e=>e.key==='Enter'&&(mode==='login'?handleLogin():handleRegister())}
-            placeholder="パスワードを入力"
-            style={{ width:'100%', padding:'12px 14px', fontSize:15, border:'1.5px solid #D0D7E3', borderRadius:10, outline:'none', color:'#1A3A5C' }}
-          />
-        </div>
+
+        {mode !== 'reset' && (
+          <div style={{ marginBottom: mode==='login' ? 8 : 20 }}>
+            <div style={{ fontSize:12, color:'#555', marginBottom:6, fontWeight:600 }}>パスワード{mode==='register'&&<span style={{ color:'#888', fontWeight:400 }}>（6文字以上）</span>}</div>
+            <input type="password" value={password} onChange={e=>setPassword(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&(mode==='login'?handleLogin():handleRegister())}
+              placeholder="パスワードを入力"
+              style={{ width:'100%', padding:'12px 14px', fontSize:15, border:'1.5px solid #D0D7E3', borderRadius:10, outline:'none', color:'#1A3A5C' }}
+            />
+          </div>
+        )}
+
+        {mode === 'login' && (
+          <div style={{ textAlign:'right', marginBottom:16 }}>
+            <button onClick={()=>switchMode('reset')} style={{ background:'none', border:'none', color:'#2563A8', fontSize:12, cursor:'pointer', textDecoration:'underline' }}>
+              パスワードを忘れた方
+            </button>
+          </div>
+        )}
+
+        {mode === 'reset' && (
+          <div style={{ marginBottom:16, padding:'12px', background:'#F0F5FF', borderRadius:10, fontSize:12, color:'#555', lineHeight:1.7 }}>
+            登録したメールアドレスを入力してください。<br/>パスワードリセット用のリンクをお送りします。
+          </div>
+        )}
 
         {error && <div style={{ color:'#EF4444', fontSize:13, marginBottom:14, textAlign:'center' }}>{error}</div>}
 
-        <button onClick={mode==='login'?handleLogin:handleRegister} disabled={loading} style={{
+        <button onClick={mode==='login'?handleLogin:mode==='register'?handleRegister:handleResetPassword} disabled={loading} style={{
           width:'100%', padding:'14px', borderRadius:12, border:'none',
           background: loading?'#BCC3CF':'#1A3A5C', color:'#fff',
           fontSize:16, fontWeight:700, cursor: loading?'not-allowed':'pointer'
         }}>
-          {loading ? (mode==='login'?'ログイン中...':'登録中...') : (mode==='login'?'ログイン':'アカウントを作成')}
+          {loading
+            ? (mode==='login'?'ログイン中...':mode==='register'?'登録中...':'送信中...')
+            : (mode==='login'?'ログイン':mode==='register'?'アカウントを作成':'リセットメールを送信')}
         </button>
+
+        {mode === 'reset' && (
+          <button onClick={()=>switchMode('login')} style={{ width:'100%', marginTop:10, padding:'12px', borderRadius:12, border:'1.5px solid #D0D7E3', background:'#fff', color:'#555', fontSize:14, fontWeight:600, cursor:'pointer' }}>
+            ログインに戻る
+          </button>
+        )}
 
         {mode==='register' && (
           <div style={{ marginTop:14, padding:'12px', background:'#F0FDF4', borderRadius:10, fontSize:12, color:'#555', lineHeight:1.7 }}>
             ※ 新規登録はスタッフ権限で作成されます。<br/>管理者権限が必要な場合は管理者に連絡してください。
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── アカウント設定モーダル ───
+function AccountModal({ onClose, authUser, userProfile, onDeleteAccount }) {
+  const [tab, setTab]             = useState('password'); // 'password' | 'delete'
+  const [currentPass, setCurrentPass] = useState('');
+  const [newPass, setNewPass]     = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [deletePass, setDeletePass] = useState('');
+  const [msg, setMsg]             = useState('');
+  const [msgType, setMsgType]     = useState('error');
+  const [loading, setLoading]     = useState(false);
+
+  const showMsg = (text, type='error') => { setMsg(text); setMsgType(type); };
+
+  const handleChangePassword = async () => {
+    if (!currentPass || !newPass || !confirmPass) { showMsg('すべて入力してください'); return; }
+    if (newPass.length < 6) { showMsg('新しいパスワードは6文字以上にしてください'); return; }
+    if (newPass !== confirmPass) { showMsg('新しいパスワードが一致しません'); return; }
+    setLoading(true); setMsg('');
+    try {
+      const { auth } = getFirebase();
+      const { EmailAuthProvider, reauthenticateWithCredential, updatePassword } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+      const cred = EmailAuthProvider.credential(authUser.email, currentPass);
+      await reauthenticateWithCredential(authUser, cred);
+      await updatePassword(authUser, newPass);
+      showMsg('✅ パスワードを変更しました', 'success');
+      setCurrentPass(''); setNewPass(''); setConfirmPass('');
+    } catch(e) {
+      if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+        showMsg('現在のパスワードが正しくありません');
+      } else {
+        showMsg('エラー: ' + e.message);
+      }
+    }
+    setLoading(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deletePass) { showMsg('パスワードを入力してください'); return; }
+    if (!window.confirm('本当にアカウントを削除しますか？\nこの操作は取り消せません。')) return;
+    setLoading(true); setMsg('');
+    try {
+      const { auth, db, doc, deleteDoc, collection, getDocs } = getFirebase();
+      const { EmailAuthProvider, reauthenticateWithCredential, deleteUser } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+      // 再認証
+      const cred = EmailAuthProvider.credential(authUser.email, deletePass);
+      await reauthenticateWithCredential(authUser, cred);
+      // Firestoreのプロフィール削除
+      await deleteDoc(doc(db, 'users', authUser.uid));
+      // Firestoreのレコード削除
+      const snap = await getDocs(collection(db, 'records'));
+      for (const d of snap.docs) {
+        if (d.data().uid === authUser.uid) await deleteDoc(doc(db, 'records', d.id));
+      }
+      // Authアカウント削除
+      await deleteUser(authUser);
+      onDeleteAccount();
+    } catch(e) {
+      if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+        showMsg('パスワードが正しくありません');
+      } else {
+        showMsg('エラー: ' + e.message);
+      }
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+      <div style={{ background:'#fff', width:'100%', maxWidth:480, borderRadius:'18px 18px 0 0', padding:'20px 16px 32px', maxHeight:'85vh', overflowY:'auto' }}>
+        <div style={{ display:'flex', alignItems:'center', marginBottom:16 }}>
+          <span style={{ fontSize:18, fontWeight:700, color:'#1A3A5C', flex:1 }}>⚙️ アカウント設定</span>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, color:'#888', cursor:'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ fontSize:13, color:'#666', marginBottom:16, padding:'8px 12px', background:'#F8FAFC', borderRadius:8 }}>
+          {userProfile?.name}　<span style={{ color:'#888' }}>{authUser.email}</span>
+        </div>
+
+        {/* タブ */}
+        <div style={{ display:'flex', background:'#F2F4F7', borderRadius:10, padding:3, marginBottom:20 }}>
+          {[['password','🔑 パスワード変更'],['delete','🗑️ 退会']].map(([t,label])=>(
+            <button key={t} onClick={()=>{setTab(t);setMsg('');}} style={{
+              flex:1, padding:'8px 0', borderRadius:8, border:'none',
+              background: tab===t?'#fff':'transparent',
+              color: tab===t?(t==='delete'?'#EF4444':'#1A3A5C'):'#888',
+              fontWeight: tab===t?700:400, fontSize:12, cursor:'pointer',
+              boxShadow: tab===t?'0 1px 4px rgba(0,0,0,0.1)':'none',
+            }}>{label}</button>
+          ))}
+        </div>
+
+        {/* パスワード変更 */}
+        {tab==='password' && (
+          <div>
+            {[['現在のパスワード', currentPass, setCurrentPass], ['新しいパスワード（6文字以上）', newPass, setNewPass], ['新しいパスワード（確認）', confirmPass, setConfirmPass]].map(([label, val, setter])=>(
+              <div key={label} style={{ marginBottom:14 }}>
+                <div style={{ fontSize:12, color:'#555', marginBottom:6, fontWeight:600 }}>{label}</div>
+                <input type="password" value={val} onChange={e=>setter(e.target.value)}
+                  placeholder="入力してください"
+                  style={{ width:'100%', padding:'12px 14px', fontSize:15, border:'1.5px solid #D0D7E3', borderRadius:10, outline:'none', color:'#1A3A5C' }}
+                />
+              </div>
+            ))}
+            {msg && <div style={{ padding:'10px 12px', borderRadius:8, marginBottom:14, fontSize:13, background: msgType==='success'?'#F0FDF4':'#FEF2F2', color: msgType==='success'?'#15803D':'#DC2626' }}>{msg}</div>}
+            <button onClick={handleChangePassword} disabled={loading} style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background: loading?'#BCC3CF':'#1A3A5C', color:'#fff', fontSize:15, fontWeight:700, cursor: loading?'not-allowed':'pointer' }}>
+              {loading ? '変更中...' : 'パスワードを変更する'}
+            </button>
+          </div>
+        )}
+
+        {/* 退会 */}
+        {tab==='delete' && (
+          <div>
+            <div style={{ padding:'14px', background:'#FEF2F2', borderRadius:10, marginBottom:16, fontSize:13, color:'#DC2626', lineHeight:1.7 }}>
+              ⚠️ <b>退会すると以下が削除されます：</b><br/>
+              ・アカウント情報<br/>
+              ・すべての売上記録データ<br/>
+              この操作は取り消せません。
+            </div>
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:12, color:'#555', marginBottom:6, fontWeight:600 }}>確認のためパスワードを入力</div>
+              <input type="password" value={deletePass} onChange={e=>setDeletePass(e.target.value)}
+                placeholder="パスワードを入力"
+                style={{ width:'100%', padding:'12px 14px', fontSize:15, border:'1.5px solid #FCA5A5', borderRadius:10, outline:'none', color:'#1A3A5C' }}
+              />
+            </div>
+            {msg && <div style={{ padding:'10px 12px', borderRadius:8, marginBottom:14, fontSize:13, background:'#FEF2F2', color:'#DC2626' }}>{msg}</div>}
+            <button onClick={handleDeleteAccount} disabled={loading} style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background: loading?'#BCC3CF':'#EF4444', color:'#fff', fontSize:15, fontWeight:700, cursor: loading?'not-allowed':'pointer' }}>
+              {loading ? '処理中...' : '退会する（削除は取り消せません）'}
+            </button>
           </div>
         )}
       </div>
@@ -412,8 +607,9 @@ function App() {
   const [saved, setSaved]                 = useState(false);
   const [saving, setSaving]               = useState(false);
   const [printView, setPrintView]         = useState(false);
-  const [showStaffModal, setShowStaffModal] = useState(false);
-  const [dataLoading, setDataLoading]     = useState(true);
+  const [showStaffModal, setShowStaffModal]   = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [dataLoading, setDataLoading]         = useState(true);
 
   const isAdmin = userProfile?.role === 'admin';
 
@@ -617,6 +813,7 @@ function App() {
     <div style={{ fontFamily:"'Helvetica Neue',Arial,sans-serif", background:'#F2F4F7', minHeight:'100vh', maxWidth:480, margin:'0 auto', paddingBottom:80 }}>
 
       {showStaffModal && isAdmin && <StaffModal onClose={()=>setShowStaffModal(false)} currentUid={authUser.uid} />}
+      {showAccountModal && <AccountModal onClose={()=>setShowAccountModal(false)} authUser={authUser} userProfile={userProfile} onDeleteAccount={()=>setShowAccountModal(false)} />}
 
       {/* ヘッダー */}
       <div style={{ background:`linear-gradient(135deg,#1A3A5C 0%,${accentColor} 100%)`, color:'#fff', padding:'16px 16px 10px', position:'sticky', top:0, zIndex:10, boxShadow:'0 2px 8px rgba(0,0,0,0.18)' }}>
@@ -631,6 +828,9 @@ function App() {
                 👥
               </button>
             )}
+            <button onClick={()=>setShowAccountModal(true)} style={{ background:'rgba(255,255,255,0.18)', border:'none', color:'#fff', borderRadius:8, padding:'6px 10px', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+              ⚙️
+            </button>
             <button onClick={handleLogout} style={{ background:'rgba(255,255,255,0.18)', border:'none', color:'#fff', borderRadius:8, padding:'6px 10px', fontSize:12, fontWeight:600, cursor:'pointer' }}>
               ログアウト
             </button>
