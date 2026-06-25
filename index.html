@@ -113,17 +113,19 @@ async function deleteRecord(uid, date) {
   await deleteDoc(doc(db, 'records', `${uid}_${date}`));
 }
 
-// ─── ログイン画面 ───
-function LoginScreen({ onLogin }) {
-  const [email, setEmail]     = useState('');
+// ─── ログイン・新規登録画面 ───
+function LoginScreen() {
+  const [mode, setMode]         = useState('login'); // 'login' | 'register'
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError]     = useState('');
-  const [loading, setLoading] = useState(false);
+  const [name, setName]         = useState('');
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
+  const [done, setDone]         = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) return;
-    setLoading(true);
-    setError('');
+    setLoading(true); setError('');
     try {
       const { auth, signInWithEmailAndPassword } = getFirebase();
       await signInWithEmailAndPassword(auth, email, password);
@@ -133,27 +135,89 @@ function LoginScreen({ onLogin }) {
     setLoading(false);
   };
 
+  const handleRegister = async () => {
+    if (!email || !password || !name.trim()) { setError('すべての項目を入力してください'); return; }
+    if (password.length < 6) { setError('パスワードは6文字以上にしてください'); return; }
+    setLoading(true); setError('');
+    try {
+      // Firebase AuthでユーザーをCreate
+      const { auth, db, doc, setDoc } = getFirebase();
+      const { createUserWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      // Firestoreにプロフィールを登録（roleはstaffで固定）
+      await setDoc(doc(db, 'users', cred.user.uid), {
+        name: name.trim(),
+        email: email.toLowerCase(),
+        role: 'staff',
+      });
+      setDone(true);
+    } catch (e) {
+      if (e.code === 'auth/email-already-in-use') {
+        setError('このメールアドレスはすでに登録されています');
+      } else {
+        setError('登録に失敗しました: ' + e.message);
+      }
+    }
+    setLoading(false);
+  };
+
+  const switchMode = (m) => { setMode(m); setError(''); setDone(false); };
+
+  if (done) return (
+    <div style={{ minHeight:'100vh', background:'linear-gradient(135deg,#1A3A5C 0%,#2563A8 100%)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+      <div style={{ background:'#fff', borderRadius:20, padding:'32px 24px', width:'100%', maxWidth:380, textAlign:'center' }}>
+        <div style={{ fontSize:48, marginBottom:16 }}>✅</div>
+        <div style={{ fontSize:20, fontWeight:800, color:'#1A3A5C', marginBottom:8 }}>登録完了！</div>
+        <div style={{ fontSize:13, color:'#666', marginBottom:24 }}>アカウントが作成されました。<br/>そのままログインできます。</div>
+        <button onClick={()=>switchMode('login')} style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'#1A3A5C', color:'#fff', fontSize:16, fontWeight:700, cursor:'pointer' }}>
+          ログイン画面へ
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ minHeight:'100vh', background:'linear-gradient(135deg,#1A3A5C 0%,#2563A8 100%)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
       <div style={{ background:'#fff', borderRadius:20, padding:'32px 24px', width:'100%', maxWidth:380, boxShadow:'0 8px 32px rgba(0,0,0,0.18)' }}>
-        <div style={{ textAlign:'center', marginBottom:28 }}>
+        <div style={{ textAlign:'center', marginBottom:24 }}>
           <div style={{ fontSize:11, color:'#888', letterSpacing:2, marginBottom:6 }}>アートセッティングデリバリー</div>
           <div style={{ fontSize:24, fontWeight:800, color:'#1A3A5C' }}>ASC 売上記録</div>
         </div>
 
+        {/* タブ切り替え */}
+        <div style={{ display:'flex', background:'#F2F4F7', borderRadius:10, padding:3, marginBottom:24 }}>
+          {[['login','ログイン'],['register','新規登録']].map(([m,label])=>(
+            <button key={m} onClick={()=>switchMode(m)} style={{
+              flex:1, padding:'8px 0', borderRadius:8, border:'none',
+              background: mode===m?'#fff':'transparent',
+              color: mode===m?'#1A3A5C':'#888',
+              fontWeight: mode===m?700:400, fontSize:13, cursor:'pointer',
+              boxShadow: mode===m?'0 1px 4px rgba(0,0,0,0.1)':'none',
+            }}>{label}</button>
+          ))}
+        </div>
+
+        {mode==='register' && (
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:12, color:'#555', marginBottom:6, fontWeight:600 }}>表示名（氏名）</div>
+            <input type="text" value={name} onChange={e=>setName(e.target.value)}
+              placeholder="例：山田 太郎"
+              style={{ width:'100%', padding:'12px 14px', fontSize:15, border:'1.5px solid #D0D7E3', borderRadius:10, outline:'none', color:'#1A3A5C' }}
+            />
+          </div>
+        )}
+
         <div style={{ marginBottom:14 }}>
           <div style={{ fontSize:12, color:'#555', marginBottom:6, fontWeight:600 }}>メールアドレス</div>
-          <input
-            type="email" value={email} onChange={e=>setEmail(e.target.value)}
+          <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
             placeholder="example@mail.com"
             style={{ width:'100%', padding:'12px 14px', fontSize:15, border:'1.5px solid #D0D7E3', borderRadius:10, outline:'none', color:'#1A3A5C' }}
           />
         </div>
         <div style={{ marginBottom:20 }}>
-          <div style={{ fontSize:12, color:'#555', marginBottom:6, fontWeight:600 }}>パスワード</div>
-          <input
-            type="password" value={password} onChange={e=>setPassword(e.target.value)}
-            onKeyDown={e=>e.key==='Enter'&&handleLogin()}
+          <div style={{ fontSize:12, color:'#555', marginBottom:6, fontWeight:600 }}>パスワード{mode==='register'&&<span style={{ color:'#888', fontWeight:400 }}>（6文字以上）</span>}</div>
+          <input type="password" value={password} onChange={e=>setPassword(e.target.value)}
+            onKeyDown={e=>e.key==='Enter'&&(mode==='login'?handleLogin():handleRegister())}
             placeholder="パスワードを入力"
             style={{ width:'100%', padding:'12px 14px', fontSize:15, border:'1.5px solid #D0D7E3', borderRadius:10, outline:'none', color:'#1A3A5C' }}
           />
@@ -161,18 +225,19 @@ function LoginScreen({ onLogin }) {
 
         {error && <div style={{ color:'#EF4444', fontSize:13, marginBottom:14, textAlign:'center' }}>{error}</div>}
 
-        <button onClick={handleLogin} disabled={loading} style={{
+        <button onClick={mode==='login'?handleLogin:handleRegister} disabled={loading} style={{
           width:'100%', padding:'14px', borderRadius:12, border:'none',
           background: loading?'#BCC3CF':'#1A3A5C', color:'#fff',
           fontSize:16, fontWeight:700, cursor: loading?'not-allowed':'pointer'
         }}>
-          {loading ? 'ログイン中...' : 'ログイン'}
+          {loading ? (mode==='login'?'ログイン中...':'登録中...') : (mode==='login'?'ログイン':'アカウントを作成')}
         </button>
 
-        <div style={{ marginTop:18, padding:'14px', background:'#F0F5FF', borderRadius:10, fontSize:12, color:'#555', lineHeight:1.7 }}>
-          <b>ログインできない場合：</b><br/>
-          管理者にアカウントの発行を依頼してください。
-        </div>
+        {mode==='register' && (
+          <div style={{ marginTop:14, padding:'12px', background:'#F0FDF4', borderRadius:10, fontSize:12, color:'#555', lineHeight:1.7 }}>
+            ※ 新規登録はスタッフ権限で作成されます。<br/>管理者権限が必要な場合は管理者に連絡してください。
+          </div>
+        )}
       </div>
     </div>
   );
