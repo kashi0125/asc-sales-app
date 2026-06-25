@@ -50,7 +50,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ─── 定数 ───
-const RATES = {
+const DEFAULT_RATES = {
   SS: { delivery: 260,  pickup: 100  },
   S:  { delivery: 520,  pickup: 150  },
   A:  { delivery: 750,  pickup: 330  },
@@ -61,7 +61,8 @@ const RATES = {
   F:  { delivery: 3280, pickup: 2290 },
   G:  { delivery: 4080, pickup: 2780 },
 };
-const SIZES = Object.keys(RATES);
+const SIZES = Object.keys(DEFAULT_RATES);
+const getRates = () => window.__rates || DEFAULT_RATES;
 const STAFF_COLORS = [
   '#2563A8','#16A34A','#DC2626','#9333EA','#D97706',
   '#0891B2','#DB2777','#65A30D','#EA580C','#7C3AED',
@@ -85,7 +86,7 @@ const emptyEntry = () => {
   SIZES.forEach(s => { e[s] = { delivery: '', pickup: '' }; });
   return e;
 };
-const calcBaseTotal   = e => SIZES.reduce((t,s)=>(t+(parseInt(e[s]?.delivery)||0)*RATES[s].delivery+(parseInt(e[s]?.pickup)||0)*RATES[s].pickup),0);
+const calcBaseTotal   = e => { const R=getRates(); return SIZES.reduce((t,s)=>(t+(parseInt(e[s]?.delivery)||0)*R[s].delivery+(parseInt(e[s]?.pickup)||0)*R[s].pickup),0); };
 const calcOptionTotal = e => (e.options||[]).reduce((s,o)=>s+(parseInt(o.amount)||0),0);
 const calcDayTotal    = e => calcBaseTotal(e)+calcOptionTotal(e);
 
@@ -301,6 +302,95 @@ function LoginScreen() {
   );
 }
 
+
+// ─── 単価管理モーダル（管理者用） ───
+function RatesModal({ onClose, currentRates, onSaved }) {
+  const [rates, setRates] = useState(JSON.parse(JSON.stringify(currentRates)));
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const handleChange = (size, type, val) => {
+    if (val !== '' && !/^\d+$/.test(val)) return;
+    setRates(prev => ({ ...prev, [size]: { ...prev[size], [type]: val === '' ? '' : parseInt(val) } }));
+  };
+
+  const handleSave = async () => {
+    // バリデーション
+    for (const size of SIZES) {
+      if (!rates[size].delivery || !rates[size].pickup) {
+        setMsg('すべての単価を入力してください'); return;
+      }
+    }
+    setSaving(true); setMsg('');
+    try {
+      const { db, doc, setDoc } = getFirebase();
+      const saveData = {};
+      SIZES.forEach(s => { saveData[s] = { delivery: parseInt(rates[s].delivery), pickup: parseInt(rates[s].pickup) }; });
+      await setDoc(doc(db, 'settings', 'rates'), saveData);
+      window.__rates = saveData;
+      onSaved(saveData);
+      setMsg('✅ 保存しました');
+      setTimeout(() => onClose(), 800);
+    } catch(e) {
+      setMsg('保存に失敗しました: ' + e.message);
+    }
+    setSaving(false);
+  };
+
+  const handleReset = () => {
+    if (!window.confirm('単価をデフォルト値に戻しますか？')) return;
+    setRates(JSON.parse(JSON.stringify(DEFAULT_RATES)));
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+      <div style={{ background:'#fff', width:'100%', maxWidth:480, borderRadius:'18px 18px 0 0', padding:'20px 16px 32px', maxHeight:'90vh', overflowY:'auto' }}>
+        <div style={{ display:'flex', alignItems:'center', marginBottom:16 }}>
+          <span style={{ fontSize:18, fontWeight:700, color:'#1A3A5C', flex:1 }}>💴 単価管理</span>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, color:'#888', cursor:'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ background:'#FFF7ED', borderRadius:10, padding:'10px 12px', marginBottom:16, fontSize:12, color:'#C2410C' }}>
+          ⚠️ 単価を変更すると過去の記録の金額表示にも影響します。
+        </div>
+
+        {/* 単価テーブル */}
+        <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', border:'1px solid #E5E7EB', marginBottom:14 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'52px 1fr 1fr', background:'#1A3A5C', color:'#fff', padding:'8px 10px', fontSize:12, fontWeight:600, gap:6, textAlign:'center' }}>
+            <div>サイズ</div>
+            <div>配達単価（¥）</div>
+            <div>集荷単価（¥）</div>
+          </div>
+          {SIZES.map((size, i) => (
+            <div key={size} style={{ display:'grid', gridTemplateColumns:'52px 1fr 1fr', alignItems:'center', gap:6, padding:'8px 10px', background:i%2===0?'#fff':'#F8FAFC', borderBottom:'1px solid #EEF1F5' }}>
+              <div style={{ fontWeight:700, fontSize:16, color:'#1A3A5C', textAlign:'center' }}>{size}</div>
+              <input type="number" inputMode="numeric" min="0" value={rates[size]?.delivery ?? ''}
+                onChange={e => handleChange(size, 'delivery', e.target.value)}
+                style={{ width:'100%', padding:'8px 6px', fontSize:15, textAlign:'center', border:'1.5px solid #D0D7E3', borderRadius:8, outline:'none', color:'#2563A8', fontWeight:600, background:'#F5F8FF' }}
+              />
+              <input type="number" inputMode="numeric" min="0" value={rates[size]?.pickup ?? ''}
+                onChange={e => handleChange(size, 'pickup', e.target.value)}
+                style={{ width:'100%', padding:'8px 6px', fontSize:15, textAlign:'center', border:'1.5px solid #D0D7E3', borderRadius:8, outline:'none', color:'#E07B39', fontWeight:600, background:'#FFF8F5' }}
+              />
+            </div>
+          ))}
+        </div>
+
+        {msg && <div style={{ padding:'10px 12px', borderRadius:8, marginBottom:12, fontSize:13, background: msg.startsWith('✅')?'#F0FDF4':'#FEF2F2', color: msg.startsWith('✅')?'#15803D':'#DC2626' }}>{msg}</div>}
+
+        <div style={{ display:'flex', gap:10 }}>
+          <button onClick={handleReset} style={{ padding:'12px 16px', borderRadius:12, border:'1.5px solid #D0D7E3', background:'#fff', color:'#555', fontSize:13, fontWeight:600, cursor:'pointer' }}>
+            🔄 デフォルトに戻す
+          </button>
+          <button onClick={handleSave} disabled={saving} style={{ flex:1, padding:'14px', borderRadius:12, border:'none', background: saving?'#BCC3CF':'#1A3A5C', color:'#fff', fontSize:15, fontWeight:700, cursor: saving?'not-allowed':'pointer' }}>
+            {saving ? '保存中...' : '💾 保存する'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── アカウント設定モーダル ───
 function AccountModal({ onClose, authUser, userProfile, onDeleteAccount }) {
   const [tab, setTab]             = useState('password'); // 'password' | 'delete'
@@ -441,71 +531,124 @@ function AccountModal({ onClose, authUser, userProfile, onDeleteAccount }) {
 // ─── スタッフ管理モーダル（管理者用） ───
 function StaffModal({ onClose, currentUid }) {
   const [staffList, setStaffList] = useState([]);
-  const [newEmail, setNewEmail]   = useState('');
-  const [newName, setNewName]     = useState('');
-  const [newPass, setNewPass]     = useState('');
-  const [newRole, setNewRole]     = useState('staff');
-  const [msg, setMsg]             = useState('');
   const [loading, setLoading]     = useState(true);
+  const [msg, setMsg]             = useState('');
+  const [msgType, setMsgType]     = useState('error');
+  const [updatingUid, setUpdatingUid] = useState(null);
 
-  useEffect(() => {
+  const reload = () => {
     const { db, collection, getDocs } = getFirebase();
     loadAllStaff(db, collection, getDocs).then(list => {
       setStaffList(list);
       setLoading(false);
     });
-  }, []);
+  };
 
-  const handleAdd = async () => {
-    if (!newEmail.trim() || !newName.trim() || !newPass.trim()) {
-      setMsg('すべての項目を入力してください'); return;
+  useEffect(() => { reload(); }, []);
+
+  const handleRoleChange = async (uid, newRole) => {
+    if (uid === currentUid) {
+      setMsg('自分自身の権限は変更できません'); setMsgType('error'); return;
     }
-    setMsg('');
+    if (!window.confirm(`この操作で権限を「${newRole === 'admin' ? '管理者' : 'スタッフ'}」に変更します。よろしいですか？`)) return;
+    setUpdatingUid(uid); setMsg('');
     try {
-      // Firebase Admin APIはクライアントから呼べないため、
-      // 管理者がFirebaseコンソールでユーザー追加後、Firestoreにプロフィールを登録する方式
-      setMsg('⚠️ ユーザー追加はFirebaseコンソールから行ってください（下記手順参照）');
+      const { db, doc, setDoc } = getFirebase();
+      const target = staffList.find(s => s.uid === uid);
+      await setDoc(doc(db, 'users', uid), { ...target, role: newRole });
+      setMsg('✅ 権限を変更しました'); setMsgType('success');
+      reload();
     } catch(e) {
-      setMsg('エラー: ' + e.message);
+      setMsg('エラー: ' + e.message); setMsgType('error');
     }
+    setUpdatingUid(null);
+  };
+
+  const handleForceDelete = async (uid, name) => {
+    if (uid === currentUid) {
+      setMsg('自分自身は削除できません'); setMsgType('error'); return;
+    }
+    if (!window.confirm(`「${name}」のアカウントを強制退会させますか？\n\n・プロフィール情報を削除\n・売上データをすべて削除\n\nこの操作は取り消せません。`)) return;
+    setUpdatingUid(uid); setMsg('');
+    try {
+      const { db, doc, deleteDoc, collection, getDocs } = getFirebase();
+      // Firestoreのプロフィール削除
+      await deleteDoc(doc(db, 'users', uid));
+      // Firestoreの売上レコード削除
+      const snap = await getDocs(collection(db, 'records'));
+      for (const d of snap.docs) {
+        if (d.data().uid === uid) await deleteDoc(doc(db, 'records', d.id));
+      }
+      setMsg('✅ アカウントを削除しました。Firebaseコンソールから認証アカウントも削除してください。');
+      setMsgType('success');
+      reload();
+    } catch(e) {
+      setMsg('エラー: ' + e.message); setMsgType('error');
+    }
+    setUpdatingUid(null);
   };
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
       <div style={{ background:'#fff', width:'100%', maxWidth:480, borderRadius:'18px 18px 0 0', padding:'20px 16px 32px', maxHeight:'85vh', overflowY:'auto' }}>
         <div style={{ display:'flex', alignItems:'center', marginBottom:16 }}>
-          <span style={{ fontSize:18, fontWeight:700, color:'#1A3A5C', flex:1 }}>👥 スタッフ一覧</span>
+          <span style={{ fontSize:18, fontWeight:700, color:'#1A3A5C', flex:1 }}>👥 スタッフ管理</span>
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, color:'#888', cursor:'pointer' }}>✕</button>
         </div>
 
-        {loading ? <div style={{ textAlign:'center', padding:20 }}><div className="spinner" style={{ margin:'0 auto' }}/></div> : (
-          staffList.map((s,i) => (
-            <div key={s.uid} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background:i%2?'#F8FAFC':'#fff', borderRadius:8, marginBottom:4 }}>
+        <div style={{ fontSize:12, color:'#666', marginBottom:12, lineHeight:1.7 }}>
+          権限バッジをタップして管理者↔スタッフを切り替えられます。<br/>
+          🗑️ボタンで強制退会（データ削除）できます。
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign:'center', padding:20 }}><div className="spinner" style={{ margin:'0 auto' }}/></div>
+        ) : (
+          staffList.map((s, i) => (
+            <div key={s.uid} style={{ display:'flex', alignItems:'center', gap:10, padding:'12px', background:i%2?'#F8FAFC':'#fff', borderRadius:10, marginBottom:6, border:'1px solid #EEF1F5' }}>
               <div style={{ width:10, height:10, borderRadius:'50%', background:staffColor(i), flexShrink:0 }}/>
               <div style={{ flex:1 }}>
-                <div style={{ fontWeight:700, fontSize:14, color:'#1A3A5C' }}>{s.name}</div>
+                <div style={{ fontWeight:700, fontSize:14, color:'#1A3A5C', display:'flex', alignItems:'center', gap:6 }}>
+                  {s.name}
+                  {s.uid === currentUid && <span style={{ fontSize:10, color:'#888', fontWeight:400 }}>（自分）</span>}
+                </div>
                 <div style={{ fontSize:11, color:'#888' }}>{s.email}</div>
               </div>
-              <span style={{ fontSize:11, padding:'2px 8px', borderRadius:6, background: s.role==='admin'?'#DBEAFE':'#F0FDF4', color: s.role==='admin'?'#1D4ED8':'#15803D', fontWeight:600 }}>
-                {s.role==='admin'?'管理者':'スタッフ'}
-              </span>
+              {/* 権限切り替え＋削除ボタン */}
+              {updatingUid === s.uid ? (
+                <span style={{ fontSize:11, color:'#888' }}>更新中...</span>
+              ) : s.uid === currentUid ? (
+                <span style={{ fontSize:11, padding:'4px 10px', borderRadius:6, background:'#DBEAFE', color:'#1D4ED8', fontWeight:600 }}>
+                  👑 管理者
+                </span>
+              ) : (
+                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                  <button
+                    onClick={() => handleRoleChange(s.uid, s.role === 'admin' ? 'staff' : 'admin')}
+                    style={{
+                      fontSize:11, padding:'4px 10px', borderRadius:6, fontWeight:600, cursor:'pointer', border:'none',
+                      background: s.role === 'admin' ? '#DBEAFE' : '#F0FDF4',
+                      color: s.role === 'admin' ? '#1D4ED8' : '#15803D',
+                    }}>
+                    {s.role === 'admin' ? '👑 管理者' : '👤 スタッフ'}
+                  </button>
+                  <button
+                    onClick={() => handleForceDelete(s.uid, s.name)}
+                    style={{ fontSize:13, padding:'4px 8px', borderRadius:6, border:'1.5px solid #FCA5A5', background:'#FFF', color:'#EF4444', cursor:'pointer', fontWeight:700 }}
+                    title="強制退会">
+                    🗑️
+                  </button>
+                </div>
+              )}
             </div>
           ))
         )}
 
-        <div style={{ marginTop:20, padding:14, background:'#FFF7ED', borderRadius:12, border:'1px solid #FED7AA' }}>
-          <div style={{ fontWeight:700, color:'#C2410C', marginBottom:8, fontSize:13 }}>➕ スタッフを追加するには</div>
-          <div style={{ fontSize:12, color:'#555', lineHeight:1.8 }}>
-            1. <a href="https://console.firebase.google.com" target="_blank" style={{ color:'#2563A8' }}>Firebaseコンソール</a> を開く<br/>
-            2. Authentication → 「ユーザーを追加」<br/>
-            3. メール・パスワードを設定してユーザー作成<br/>
-            4. 作成されたUIDをコピー<br/>
-            5. Firestore → users コレクション → 新しいドキュメント（IDにUID）を追加<br/>
-            　フィールド：<code>name</code>（表示名）、<code>email</code>、<code>role</code>（adminまたはstaff）
+        {msg && (
+          <div style={{ marginTop:12, padding:'10px 12px', borderRadius:8, fontSize:13, background: msgType==='success'?'#F0FDF4':'#FEF2F2', color: msgType==='success'?'#15803D':'#DC2626' }}>
+            {msg}
           </div>
-        </div>
-
-        {msg && <div style={{ marginTop:12, padding:10, background:'#FEF2F2', color:'#DC2626', borderRadius:8, fontSize:13 }}>{msg}</div>}
+        )}
 
         <button onClick={onClose} style={{ width:'100%', marginTop:16, padding:14, borderRadius:12, border:'none', background:'#1A3A5C', color:'#fff', fontSize:15, fontWeight:700, cursor:'pointer' }}>
           閉じる
@@ -609,7 +752,9 @@ function App() {
   const [printView, setPrintView]         = useState(false);
   const [showStaffModal, setShowStaffModal]   = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
-  const [dataLoading, setDataLoading]         = useState(true);
+  const [showRatesModal, setShowRatesModal]     = useState(false);
+  const [currentRates, setCurrentRates]         = useState(DEFAULT_RATES);
+  const [dataLoading, setDataLoading]           = useState(true);
 
   const isAdmin = userProfile?.role === 'admin';
 
@@ -618,7 +763,14 @@ function App() {
     const interval = setInterval(() => {
       if (!window.__firebase) return;
       clearInterval(interval);
-      const { auth, onAuthStateChanged } = window.__firebase;
+      const { auth, onAuthStateChanged, db, doc, getDoc } = window.__firebase;
+      // 単価をFirestoreから読み込む
+      getDoc(doc(db, 'settings', 'rates')).then(snap => {
+        if (snap.exists()) {
+          window.__rates = snap.data();
+          setCurrentRates(snap.data());
+        }
+      });
       onAuthStateChanged(auth, async user => {
         setAuthUser(user);
         if (user) {
@@ -769,7 +921,7 @@ function App() {
 
   const monthBreakdown = SIZES.map(size => {
     let dc=0,da=0,pc=0,pa=0;
-    monthDays.forEach(([,e])=>{const d=parseInt(e[size]?.delivery)||0,p=parseInt(e[size]?.pickup)||0;dc+=d;da+=d*RATES[size].delivery;pc+=p;pa+=p*RATES[size].pickup;});
+    const R=getRates(); monthDays.forEach(([,e])=>{const d=parseInt(e[size]?.delivery)||0,p=parseInt(e[size]?.pickup)||0;dc+=d;da+=d*R[size].delivery;pc+=p;pa+=p*R[size].pickup;});
     return {size,dc,da,pc,pa};
   }).filter(r=>r.dc>0||r.pc>0);
 
@@ -814,6 +966,7 @@ function App() {
 
       {showStaffModal && isAdmin && <StaffModal onClose={()=>setShowStaffModal(false)} currentUid={authUser.uid} />}
       {showAccountModal && <AccountModal onClose={()=>setShowAccountModal(false)} authUser={authUser} userProfile={userProfile} onDeleteAccount={()=>setShowAccountModal(false)} />}
+      {showRatesModal && isAdmin && <RatesModal onClose={()=>setShowRatesModal(false)} currentRates={currentRates} onSaved={r=>setCurrentRates(r)} />}
 
       {/* ヘッダー */}
       <div style={{ background:`linear-gradient(135deg,#1A3A5C 0%,${accentColor} 100%)`, color:'#fff', padding:'16px 16px 10px', position:'sticky', top:0, zIndex:10, boxShadow:'0 2px 8px rgba(0,0,0,0.18)' }}>
@@ -826,6 +979,11 @@ function App() {
             {isAdmin && (
               <button onClick={()=>setShowStaffModal(true)} style={{ background:'rgba(255,255,255,0.18)', border:'none', color:'#fff', borderRadius:8, padding:'6px 10px', fontSize:12, fontWeight:600, cursor:'pointer' }}>
                 👥
+              </button>
+            )}
+            {isAdmin && (
+              <button onClick={()=>setShowRatesModal(true)} style={{ background:'rgba(255,255,255,0.18)', border:'none', color:'#fff', borderRadius:8, padding:'6px 10px', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                💴
               </button>
             )}
             <button onClick={()=>setShowAccountModal(true)} style={{ background:'rgba(255,255,255,0.18)', border:'none', color:'#fff', borderRadius:8, padding:'6px 10px', fontSize:12, fontWeight:600, cursor:'pointer' }}>
@@ -910,8 +1068,8 @@ function App() {
               <div>小計</div>
             </div>
             {SIZES.map((size,i)=>{
-              const d=parseInt(entry[size]?.delivery)||0, p=parseInt(entry[size]?.pickup)||0;
-              const sub=d*RATES[size].delivery+p*RATES[size].pickup;
+              const R=getRates(); const d=parseInt(entry[size]?.delivery)||0, p=parseInt(entry[size]?.pickup)||0;
+              const sub=d*R[size].delivery+p*R[size].pickup;
               return (
                 <div key={size} style={{ display:'grid', gridTemplateColumns:'52px 1fr 1fr 1fr', alignItems:'center', gap:6, padding:'8px 10px', background:i%2===0?'#fff':'#F8FAFC', borderBottom:'1px solid #EEF1F5' }}>
                   <div style={{ fontWeight:700, fontSize:18, color:'#1A3A5C', textAlign:'center' }}>{size}</div>
@@ -1005,8 +1163,8 @@ function App() {
                 {['サイズ','配達','集荷'].map(h=><div key={h} style={{ fontWeight:700, color:'#888', padding:'6px 0', borderBottom:'1px solid #eee' }}>{h}</div>)}
                 {SIZES.map((s,i)=>[
                   <div key={s+'n'} style={{ padding:'5px 0', background:i%2?'#F8FAFC':'#fff', fontWeight:600 }}>{s}</div>,
-                  <div key={s+'d'} style={{ padding:'5px 0', background:i%2?'#F8FAFC':'#fff', color:'#2563A8' }}>¥{fmt(RATES[s].delivery)}</div>,
-                  <div key={s+'p'} style={{ padding:'5px 0', background:i%2?'#F8FAFC':'#fff', color:'#E07B39' }}>¥{fmt(RATES[s].pickup)}</div>,
+                  <div key={s+'d'} style={{ padding:'5px 0', background:i%2?'#F8FAFC':'#fff', color:'#2563A8' }}>¥{fmt(getRates()[s].delivery)}</div>,
+                  <div key={s+'p'} style={{ padding:'5px 0', background:i%2?'#F8FAFC':'#fff', color:'#E07B39' }}>¥{fmt(getRates()[s].pickup)}</div>,
                 ])}
               </div>
             </div>
