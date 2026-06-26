@@ -1319,23 +1319,7 @@ function App() {
             </div>
             <div style={{ fontSize:11, opacity:0.65, marginTop:4 }}>{monthDays.length}日分の記録</div>
           </div>
-          {monthBreakdown.length>0&&(
-            <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
-              <div style={{ background:'#1A3A5C', color:'#fff', padding:'10px 14px', fontSize:13, fontWeight:700 }}>サイズ別集計</div>
-              {monthBreakdown.map((r,i)=>(
-                <div key={r.size} style={{ padding:'10px 14px', background:i%2?'#F8FAFC':'#fff', borderBottom:'1px solid #EEF1F5' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
-                    <span style={{ fontWeight:700, fontSize:16, color:'#1A3A5C' }}>サイズ {r.size}</span>
-                    <span style={{ fontWeight:700, fontSize:15, color:accentColor }}>¥{fmt(r.da+r.pa)}</span>
-                  </div>
-                  <div style={{ display:'flex', gap:14, fontSize:12, color:'#666' }}>
-                    {r.dc>0&&<span>🚚 配達 {r.dc}件 ¥{fmt(r.da)}</span>}
-                    {r.pc>0&&<span>📦 集荷 {r.pc}件 ¥{fmt(r.pa)}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+
           {monthOptions.length>0&&(
             <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
               <div style={{ background:'#5B4FCF', color:'#fff', padding:'10px 14px', fontSize:13, fontWeight:700 }}>⭐ オプション明細</div>
