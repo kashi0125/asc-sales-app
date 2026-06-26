@@ -63,6 +63,7 @@ const DEFAULT_RATES = {
 };
 const SIZES = Object.keys(DEFAULT_RATES);
 const getRates = () => window.__rates || DEFAULT_RATES;
+const getBranches = () => window.__branches || ['北大阪支店','東大阪支店','淀川支店','西大阪支店'];
 const STAFF_COLORS = [
   '#2563A8','#16A34A','#DC2626','#9333EA','#D97706',
   '#0891B2','#DB2777','#65A30D','#EA580C','#7C3AED',
@@ -81,12 +82,20 @@ const dateLabel = d => {
 };
 const monthLabel = m => { const [y,mo]=m.split('-'); return `${y}年${parseInt(mo)}月`; };
 
-const emptyEntry = () => {
-  const e = { options: [] };
-  SIZES.forEach(s => { e[s] = { delivery: '', pickup: '' }; });
-  return e;
+const emptyBranchSizes = () => {
+  const o = {};
+  SIZES.forEach(s => { o[s] = { delivery:'', pickup:'' }; });
+  return o;
 };
-const calcBaseTotal   = e => { const R=getRates(); return SIZES.reduce((t,s)=>(t+(parseInt(e[s]?.delivery)||0)*R[s].delivery+(parseInt(e[s]?.pickup)||0)*R[s].pickup),0); };
+const emptyEntry = () => ({ options:[], branchData:{} });
+
+// 支店ひとつ分の基本料金
+const calcBranchTotal = (bData) => {
+  const R = getRates();
+  return SIZES.reduce((t,s)=>(t+(parseInt(bData?.[s]?.delivery)||0)*R[s].delivery+(parseInt(bData?.[s]?.pickup)||0)*R[s].pickup),0);
+};
+// エントリ全体の基本料金（全支店合計）
+const calcBaseTotal = e => Object.values(e.branchData||{}).reduce((t,bd)=>t+calcBranchTotal(bd),0);
 const calcOptionTotal = e => (e.options||[]).reduce((s,o)=>s+(parseInt(o.amount)||0),0);
 const calcDayTotal    = e => calcBaseTotal(e)+calcOptionTotal(e);
 
@@ -325,6 +334,86 @@ function LoginScreen() {
   );
 }
 
+
+
+// ─── 支店管理モーダル（管理者用） ───
+function BranchModal({ onClose, currentBranches, onSaved }) {
+  const [branches, setBranches] = useState([...currentBranches]);
+  const [newName, setNewName]   = useState('');
+  const [saving, setSaving]     = useState(false);
+  const [msg, setMsg]           = useState('');
+
+  const handleAdd = () => {
+    const name = newName.trim();
+    if (!name) return;
+    if (branches.includes(name)) { setMsg('同じ名前の支店がすでにあります'); return; }
+    setBranches(prev => [...prev, name]);
+    setNewName(''); setMsg('');
+  };
+
+  const handleRename = (idx, val) => {
+    setBranches(prev => prev.map((b,i) => i===idx ? val : b));
+  };
+
+  const handleDelete = (idx) => {
+    if (!window.confirm(`「${branches[idx]}」を削除しますか？`)) return;
+    setBranches(prev => prev.filter((_,i) => i!==idx));
+  };
+
+  const handleSave = async () => {
+    const cleaned = branches.map(b=>b.trim()).filter(Boolean);
+    if (cleaned.length === 0) { setMsg('支店を1つ以上入力してください'); return; }
+    setSaving(true); setMsg('');
+    try {
+      const { db, doc, setDoc } = getFirebase();
+      await setDoc(doc(db, 'settings', 'branches'), { list: cleaned });
+      window.__branches = cleaned;
+      onSaved(cleaned);
+      setMsg('✅ 保存しました');
+      setTimeout(() => onClose(), 800);
+    } catch(e) {
+      setMsg('保存に失敗しました: ' + e.message);
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+      <div style={{ background:'#fff', width:'100%', maxWidth:480, borderRadius:'18px 18px 0 0', padding:'20px 16px 32px', maxHeight:'90vh', overflowY:'auto' }}>
+        <div style={{ display:'flex', alignItems:'center', marginBottom:16 }}>
+          <span style={{ fontSize:18, fontWeight:700, color:'#1A3A5C', flex:1 }}>🏢 支店管理</span>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, color:'#888', cursor:'pointer' }}>✕</button>
+        </div>
+
+        {/* 支店リスト */}
+        {branches.map((b, idx) => (
+          <div key={idx} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:8 }}>
+            <input value={b} onChange={e=>handleRename(idx, e.target.value)}
+              style={{ flex:1, padding:'10px 12px', fontSize:14, border:'1.5px solid #D0D7E3', borderRadius:10, outline:'none', color:'#1A3A5C' }}
+            />
+            <button onClick={()=>handleDelete(idx)} style={{ padding:'10px 12px', borderRadius:10, border:'1.5px solid #FCA5A5', background:'#fff', color:'#EF4444', fontSize:14, fontWeight:700, cursor:'pointer' }}>🗑️</button>
+          </div>
+        ))}
+
+        {/* 新規追加 */}
+        <div style={{ display:'flex', gap:8, marginTop:12, marginBottom:4 }}>
+          <input value={newName} onChange={e=>setNewName(e.target.value)}
+            onKeyDown={e=>e.key==='Enter'&&handleAdd()}
+            placeholder="新しい支店名を入力"
+            style={{ flex:1, padding:'10px 12px', fontSize:14, border:'1.5px dashed #2563A8', borderRadius:10, outline:'none', color:'#1A3A5C' }}
+          />
+          <button onClick={handleAdd} style={{ padding:'10px 16px', borderRadius:10, border:'none', background:'#2563A8', color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer' }}>追加</button>
+        </div>
+
+        {msg && <div style={{ padding:'10px 12px', borderRadius:8, marginTop:10, fontSize:13, background: msg.startsWith('✅')?'#F0FDF4':'#FEF2F2', color: msg.startsWith('✅')?'#15803D':'#DC2626' }}>{msg}</div>}
+
+        <button onClick={handleSave} disabled={saving} style={{ width:'100%', marginTop:16, padding:'14px', borderRadius:12, border:'none', background: saving?'#BCC3CF':'#1A3A5C', color:'#fff', fontSize:15, fontWeight:700, cursor: saving?'not-allowed':'pointer' }}>
+          {saving ? '保存中...' : '💾 保存する'}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ─── 単価管理モーダル（管理者用） ───
 function RatesModal({ onClose, currentRates, onSaved }) {
@@ -772,13 +861,17 @@ function App() {
   const [entry, setEntry]                 = useState(emptyEntry());
   const [saved, setSaved]                 = useState(false);
   const [saving, setSaving]               = useState(false);
-  const [imageData, setImageData]         = useState(null);  // 現在表示中の画像base64
-  const [imageUploading, setImageUploading] = useState(false);
+  const [imageData, setImageData]         = useState(null);  // 作業確認書
+  const [imageData2, setImageData2]       = useState(null);  // その他
+  const [imageUploading, setImageUploading]   = useState(false);
+  const [imageUploading2, setImageUploading2] = useState(false);
   const [printView, setPrintView]         = useState(false);
   const [showStaffModal, setShowStaffModal]   = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
-  const [showRatesModal, setShowRatesModal]     = useState(false);
-  const [currentRates, setCurrentRates]         = useState(DEFAULT_RATES);
+  const [showRatesModal, setShowRatesModal]         = useState(false);
+  const [currentRates, setCurrentRates]             = useState(DEFAULT_RATES);
+  const [showBranchModal, setShowBranchModal]       = useState(false);
+  const [currentBranches, setCurrentBranches]       = useState(['北大阪支店','東大阪支店','淀川支店','西大阪支店']);
   const [dataLoading, setDataLoading]           = useState(true);
 
   const isAdmin = userProfile?.role === 'admin';
@@ -794,6 +887,13 @@ function App() {
         if (snap.exists()) {
           window.__rates = snap.data();
           setCurrentRates(snap.data());
+        }
+      });
+      // 支店リストをFirestoreから読み込む
+      getDoc(doc(db, 'settings', 'branches')).then(snap => {
+        if (snap.exists() && snap.data().list) {
+          window.__branches = snap.data().list;
+          setCurrentBranches(snap.data().list);
         }
       });
       onAuthStateChanged(auth, async user => {
@@ -864,16 +964,22 @@ function App() {
       if (!copy.options) copy.options = [];
       setEntry(copy);
       setImageData(copy.image || null);
+      setImageData2(copy.image2 || null);
     } else {
       setEntry(emptyEntry());
       setImageData(null);
+      setImageData2(null);
     }
     setSaved(false);
   }, [selectedDate, records, currentStaffId]);
 
-  const handleChange = (size, type, val) => {
+  const handleChange = (branch, size, type, val) => {
     if (val !== '' && !/^\d+$/.test(val)) return;
-    setEntry(prev => ({ ...prev, [size]: { ...prev[size], [type]: val } }));
+    setEntry(prev => {
+      const bd = { ...(prev.branchData||{}) };
+      bd[branch] = { ...(bd[branch]||emptyBranchSizes()), [size]: { ...(bd[branch]?.[size]||{}), [type]: val } };
+      return { ...prev, branchData: bd };
+    });
     setSaved(false);
   };
   const addOption    = () => { setEntry(prev => ({ ...prev, options: [...(prev.options||[]), { label:'', amount:'' }] })); setSaved(false); };
@@ -889,6 +995,8 @@ function App() {
     try {
       const entryToSave = JSON.parse(JSON.stringify(entry));
       if (imageData) entryToSave.image = imageData;
+      if (imageData2) entryToSave.image2 = imageData2;
+      else delete entryToSave.image2;
       await saveRecord(currentStaffId, selectedDate, entryToSave);
       setSaved(true);
     } catch(e) {
@@ -915,6 +1023,27 @@ function App() {
   const handleImageDelete = () => {
     if (!window.confirm('画像を削除しますか？')) return;
     setImageData(null);
+    setSaved(false);
+  };
+
+  const handleImageSelect2 = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImageUploading2(true);
+    try {
+      const compressed = await compressImage(file);
+      setImageData2(compressed);
+      setSaved(false);
+    } catch(err) {
+      alert('画像の読み込みに失敗しました');
+    }
+    setImageUploading2(false);
+    e.target.value = '';
+  };
+
+  const handleImageDelete2 = () => {
+    if (!window.confirm('画像を削除しますか？')) return;
+    setImageData2(null);
     setSaved(false);
   };
 
@@ -971,7 +1100,13 @@ function App() {
 
   const monthBreakdown = SIZES.map(size => {
     let dc=0,da=0,pc=0,pa=0;
-    const R=getRates(); monthDays.forEach(([,e])=>{const d=parseInt(e[size]?.delivery)||0,p=parseInt(e[size]?.pickup)||0;dc+=d;da+=d*R[size].delivery;pc+=p;pa+=p*R[size].pickup;});
+    const R=getRates();
+    monthDays.forEach(([,e])=>{
+      Object.values(e.branchData||{}).forEach(bd=>{
+        const d=parseInt(bd[size]?.delivery)||0,p=parseInt(bd[size]?.pickup)||0;
+        dc+=d;da+=d*R[size].delivery;pc+=p;pa+=p*R[size].pickup;
+      });
+    });
     return {size,dc,da,pc,pa};
   }).filter(r=>r.dc>0||r.pc>0);
 
@@ -989,7 +1124,7 @@ function App() {
   const baseTotal   = calcBaseTotal(entry);
   const optionTotal = calcOptionTotal(entry);
   const dayTotal    = baseTotal + optionTotal;
-  const hasDayData  = SIZES.some(s=>(parseInt(entry[s]?.delivery)||0)+(parseInt(entry[s]?.pickup)||0)>0)||(entry.options||[]).some(o=>parseInt(o.amount)||0);
+  const hasDayData  = Object.values(entry.branchData||{}).some(bd=>SIZES.some(s=>(parseInt(bd?.[s]?.delivery)||0)+(parseInt(bd?.[s]?.pickup)||0)>0))||(entry.options||[]).some(o=>parseInt(o.amount)||0);
 
   const inputStyle = { width:'100%', padding:'8px 4px', fontSize:18, textAlign:'center', border:'1.5px solid #D0D7E3', borderRadius:8, outline:'none', boxSizing:'border-box', color:'#1A3A5C' };
 
@@ -1017,6 +1152,7 @@ function App() {
       {showStaffModal && isAdmin && <StaffModal onClose={()=>setShowStaffModal(false)} currentUid={authUser.uid} />}
       {showAccountModal && <AccountModal onClose={()=>setShowAccountModal(false)} authUser={authUser} userProfile={userProfile} onDeleteAccount={()=>setShowAccountModal(false)} />}
       {showRatesModal && isAdmin && <RatesModal onClose={()=>setShowRatesModal(false)} currentRates={currentRates} onSaved={r=>setCurrentRates(r)} />}
+      {showBranchModal && isAdmin && <BranchModal onClose={()=>setShowBranchModal(false)} currentBranches={currentBranches} onSaved={b=>{setCurrentBranches(b);}} />}
 
       {/* ヘッダー */}
       <div style={{ background:`linear-gradient(135deg,#1A3A5C 0%,${accentColor} 100%)`, color:'#fff', padding:'16px 16px 10px', position:'sticky', top:0, zIndex:10, boxShadow:'0 2px 8px rgba(0,0,0,0.18)' }}>
@@ -1034,6 +1170,11 @@ function App() {
             {isAdmin && (
               <button onClick={()=>setShowRatesModal(true)} style={{ background:'rgba(255,255,255,0.18)', border:'none', color:'#fff', borderRadius:8, padding:'6px 10px', fontSize:12, fontWeight:600, cursor:'pointer' }}>
                 💴
+              </button>
+            )}
+            {isAdmin && (
+              <button onClick={()=>setShowBranchModal(true)} style={{ background:'rgba(255,255,255,0.18)', border:'none', color:'#fff', borderRadius:8, padding:'6px 10px', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                🏢
               </button>
             )}
             <button onClick={()=>setShowAccountModal(true)} style={{ background:'rgba(255,255,255,0.18)', border:'none', color:'#fff', borderRadius:8, padding:'6px 10px', fontSize:12, fontWeight:600, cursor:'pointer' }}>
@@ -1109,36 +1250,57 @@ function App() {
             )}
           </div>
 
-          {/* サイズ表 */}
-          <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
-            <div style={{ display:'grid', gridTemplateColumns:'52px 1fr 1fr 1fr', background:'#1A3A5C', color:'#fff', padding:'8px 10px', fontSize:12, fontWeight:600, gap:6, textAlign:'center' }}>
-              <div>サイズ</div>
-              <div>配達<br/><span style={{ fontWeight:400, opacity:0.8, fontSize:10 }}>件数</span></div>
-              <div>集荷<br/><span style={{ fontWeight:400, opacity:0.8, fontSize:10 }}>件数</span></div>
-              <div>小計</div>
+          {/* 支店別サイズ表 */}
+          {currentBranches.length === 0 ? (
+            <div style={{ background:'#FFF7ED', borderRadius:12, padding:'16px', marginBottom:12, fontSize:13, color:'#C2410C', textAlign:'center' }}>
+              🏢 管理者が支店を登録すると入力できます
             </div>
-            {SIZES.map((size,i)=>{
-              const R=getRates(); const d=parseInt(entry[size]?.delivery)||0, p=parseInt(entry[size]?.pickup)||0;
-              const sub=d*R[size].delivery+p*R[size].pickup;
+          ) : (
+            currentBranches.map((branch, bi) => {
+              const bData = entry.branchData?.[branch] || {};
+              const bTotal = calcBranchTotal(bData);
+              const bColor = staffColor(bi);
               return (
-                <div key={size} style={{ display:'grid', gridTemplateColumns:'52px 1fr 1fr 1fr', alignItems:'center', gap:6, padding:'8px 10px', background:i%2===0?'#fff':'#F8FAFC', borderBottom:'1px solid #EEF1F5' }}>
-                  <div style={{ fontWeight:700, fontSize:18, color:'#1A3A5C', textAlign:'center' }}>{size}</div>
-                  <input type="number" inputMode="numeric" min="0" placeholder="0"
-                    value={entry[size]?.delivery??''} onChange={e=>handleChange(size,'delivery',e.target.value)}
-                    tabIndex={i+1} style={{ ...inputStyle, background:'#F5F8FF' }}/>
-                  <input type="number" inputMode="numeric" min="0" placeholder="0"
-                    value={entry[size]?.pickup??''} onChange={e=>handleChange(size,'pickup',e.target.value)}
-                    tabIndex={SIZES.length+i+1} style={{ ...inputStyle, background:'#FFF8F5' }}/>
-                  <div style={{ textAlign:'right', fontSize:13, fontWeight:600, color:sub>0?accentColor:'#BCC3CF', paddingRight:2 }}>
-                    {sub>0?`¥${fmt(sub)}`:'—'}
+                <div key={branch} style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12, borderTop:`3px solid ${bColor}` }}>
+                  <div style={{ background:'#1A3A5C', color:'#fff', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <span style={{ fontWeight:700, fontSize:14 }}>🏢 {branch}</span>
+                    <span style={{ fontSize:13, fontWeight:700, color: bTotal>0?'#FFD700':'rgba(255,255,255,0.5)' }}>{bTotal>0?`¥${fmt(bTotal)}`:'—'}</span>
+                  </div>
+                  <div style={{ display:'grid', gridTemplateColumns:'52px 1fr 1fr 1fr', background:'#2A4A6C', color:'#fff', padding:'6px 10px', fontSize:11, fontWeight:600, gap:6, textAlign:'center' }}>
+                    <div>サイズ</div>
+                    <div>配達</div>
+                    <div>集荷</div>
+                    <div>小計</div>
+                  </div>
+                  {SIZES.map((size,i)=>{
+                    const d=parseInt(bData[size]?.delivery)||0, p=parseInt(bData[size]?.pickup)||0;
+                    const R=getRates(); const sub=d*R[size].delivery+p*R[size].pickup;
+                    return (
+                      <div key={size} style={{ display:'grid', gridTemplateColumns:'52px 1fr 1fr 1fr', alignItems:'center', gap:6, padding:'7px 10px', background:i%2===0?'#fff':'#F8FAFC', borderBottom:'1px solid #EEF1F5' }}>
+                        <div style={{ fontWeight:700, fontSize:17, color:'#1A3A5C', textAlign:'center' }}>{size}</div>
+                        <input type="number" inputMode="numeric" min="0" placeholder="0"
+                          value={bData[size]?.delivery??''} onChange={e=>handleChange(branch,size,'delivery',e.target.value)}
+                          style={{ ...inputStyle, background:'#F5F8FF' }}/>
+                        <input type="number" inputMode="numeric" min="0" placeholder="0"
+                          value={bData[size]?.pickup??''} onChange={e=>handleChange(branch,size,'pickup',e.target.value)}
+                          style={{ ...inputStyle, background:'#FFF8F5' }}/>
+                        <div style={{ textAlign:'right', fontSize:12, fontWeight:600, color:sub>0?bColor:'#BCC3CF', paddingRight:2 }}>
+                          {sub>0?`¥${fmt(sub)}`:'—'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 14px', background:'#EEF4FF', borderTop:'1.5px solid #C7D9F5' }}>
+                    <span style={{ fontSize:12, color:'#5577AA', fontWeight:600 }}>{branch} 小計</span>
+                    <span style={{ fontSize:14, fontWeight:700, color:bColor }}>{bTotal>0?`¥${fmt(bTotal)}`:'¥0'}</span>
                   </div>
                 </div>
               );
-            })}
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 14px', background:'#EEF4FF', borderTop:'1.5px solid #C7D9F5' }}>
-              <span style={{ fontSize:12, color:'#5577AA', fontWeight:600 }}>基本料金 小計</span>
-              <span style={{ fontSize:15, fontWeight:700, color:accentColor }}>¥{fmt(baseTotal)}</span>
-            </div>
+            })
+          )}
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 14px', background:'#EEF4FF', borderRadius:10, marginBottom:12, boxShadow:'0 1px 4px rgba(0,0,0,0.07)' }}>
+            <span style={{ fontSize:12, color:'#5577AA', fontWeight:600 }}>全支店 基本料金 小計</span>
+            <span style={{ fontSize:15, fontWeight:700, color:accentColor }}>¥{fmt(baseTotal)}</span>
           </div>
 
           {/* オプション */}
@@ -1192,44 +1354,49 @@ function App() {
             )}
           </div>
 
-          {/* 画像添付フォーム */}
-          <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
-            <div style={{ background:'#374151', color:'#fff', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <span style={{ fontWeight:700, fontSize:13 }}>📎 作業確認書 等</span>
-              {!imageData && (
-                <label style={{ background:'rgba(255,255,255,0.22)', borderRadius:8, padding:'5px 12px', fontSize:13, fontWeight:700, cursor:'pointer', color:'#fff' }}>
-                  {imageUploading ? '処理中...' : '＋ 画像を追加'}
-                  <input type="file" accept="image/*" onChange={handleImageSelect} style={{ display:'none' }} disabled={imageUploading} />
-                </label>
-              )}
-            </div>
-            {imageData ? (
-              <div style={{ padding:12 }}>
-                <img src={imageData} alt="添付画像" style={{ width:'100%', borderRadius:8, display:'block', marginBottom:10 }} />
-                <div style={{ display:'flex', gap:8 }}>
-                  <label style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'10px', borderRadius:10, border:'1.5px solid #D0D7E3', background:'#F8FAFC', fontSize:13, fontWeight:600, color:'#555', cursor:'pointer' }}>
-                    🔄 画像を変更
-                    <input type="file" accept="image/*" onChange={handleImageSelect} style={{ display:'none' }} disabled={imageUploading} />
+          {/* 画像添付フォーム（作業確認書） */}
+          {[
+            { label:'📎 作業確認書', data:imageData, setData:setImageData, uploading:imageUploading, onSelect:handleImageSelect, onDelete:handleImageDelete, hint:'作業確認書の写真を添付できます' },
+            { label:'📎 その他', data:imageData2, setData:setImageData2, uploading:imageUploading2, onSelect:handleImageSelect2, onDelete:handleImageDelete2, hint:'その他の書類の写真を添付できます' },
+          ].map(({ label, data, uploading, onSelect, onDelete, hint }) => (
+            <div key={label} style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
+              <div style={{ background:'#374151', color:'#fff', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <span style={{ fontWeight:700, fontSize:13 }}>{label}</span>
+                {!data && (
+                  <label style={{ background:'rgba(255,255,255,0.22)', borderRadius:8, padding:'5px 12px', fontSize:13, fontWeight:700, cursor:'pointer', color:'#fff' }}>
+                    {uploading ? '処理中...' : '＋ 画像を追加'}
+                    <input type="file" accept="image/*" onChange={onSelect} style={{ display:'none' }} disabled={uploading} />
                   </label>
-                  <button onClick={handleImageDelete} style={{ flex:1, padding:'10px', borderRadius:10, border:'1.5px solid #FCA5A5', background:'#fff', color:'#EF4444', fontSize:13, fontWeight:600, cursor:'pointer' }}>
-                    🗑️ 画像を削除
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ padding:'20px 14px', textAlign:'center', color:'#AAB0BC', fontSize:13 }}>
-                {imageUploading ? (
-                  <div><div className="spinner" style={{ margin:'0 auto 8px' }}/><div>圧縮・処理中...</div></div>
-                ) : (
-                  <div>
-                    <div style={{ fontSize:32, marginBottom:8 }}>📷</div>
-                    <div>「＋ 画像を追加」で作業確認書等の写真を添付できます</div>
-                    <div style={{ fontSize:11, color:'#BCC3CF', marginTop:4 }}>自動で圧縮して保存されます</div>
-                  </div>
                 )}
               </div>
-            )}
-          </div>
+              {data ? (
+                <div style={{ padding:12 }}>
+                  <img src={data} alt="添付画像" style={{ width:'100%', borderRadius:8, display:'block', marginBottom:10 }} />
+                  <div style={{ display:'flex', gap:8 }}>
+                    <label style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'10px', borderRadius:10, border:'1.5px solid #D0D7E3', background:'#F8FAFC', fontSize:13, fontWeight:600, color:'#555', cursor:'pointer' }}>
+                      🔄 画像を変更
+                      <input type="file" accept="image/*" onChange={onSelect} style={{ display:'none' }} disabled={uploading} />
+                    </label>
+                    <button onClick={onDelete} style={{ flex:1, padding:'10px', borderRadius:10, border:'1.5px solid #FCA5A5', background:'#fff', color:'#EF4444', fontSize:13, fontWeight:600, cursor:'pointer' }}>
+                      🗑️ 画像を削除
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding:'20px 14px', textAlign:'center', color:'#AAB0BC', fontSize:13 }}>
+                  {uploading ? (
+                    <div><div className="spinner" style={{ margin:'0 auto 8px' }}/><div>圧縮・処理中...</div></div>
+                  ) : (
+                    <div>
+                      <div style={{ fontSize:32, marginBottom:8 }}>📷</div>
+                      <div>「＋ 画像を追加」で{hint.replace('の写真を添付できます','')}</div>
+                      <div style={{ fontSize:11, color:'#BCC3CF', marginTop:4 }}>自動で圧縮して保存されます</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
 
           {/* ボタン */}
           <div style={{ display:'flex', gap:10, marginBottom:10 }}>
@@ -1337,7 +1504,10 @@ function App() {
                       </div>
                       <div style={{ fontSize:11, color:'#999', marginTop:1 }}>
                         {SIZES.filter(s=>(parseInt(e[s]?.delivery)||0)+(parseInt(e[s]?.pickup)||0)>0)
-                          .map(s=>{const d2=parseInt(e[s]?.delivery)||0,p=parseInt(e[s]?.pickup)||0;return[d2>0&&`${s}配${d2}`,p>0&&`${s}集${p}`].filter(Boolean).join(' ');})
+                          .map(s=>{
+                            let td=0,tp=0;
+                            Object.values(e.branchData||{}).forEach(bd=>{td+=parseInt(bd[s]?.delivery)||0;tp+=parseInt(bd[s]?.pickup)||0;});
+                            return[td>0&&`${s}配${td}`,tp>0&&`${s}集${tp}`].filter(Boolean).join(' ');})
                           .filter(Boolean).join('　')}
                       </div>
                     </div>
