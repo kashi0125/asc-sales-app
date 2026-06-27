@@ -1368,6 +1368,10 @@ function App() {
                 <div style={{ fontWeight:700, color:'#1A3A5C' }}>月合計</div>
                 <div style={{ fontWeight:800, fontSize:18, color:'#1A3A5C' }}>¥{fmt(monthTotal)}</div>
               </div>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', background:'#F8FAFC', borderTop:'1px solid #D0D7E3' }}>
+                <div style={{ fontSize:13, color:'#5577AA', fontWeight:600 }}>１日平均</div>
+                <div style={{ fontWeight:700, fontSize:15, color:'#5577AA' }}>¥{fmt(monthDays.length > 0 ? Math.round(monthTotal / monthDays.length) : 0)}</div>
+              </div>
             </div>
           ):(
             <div style={{ textAlign:'center', padding:'40px 20px', color:'#AAB0BC' }}>
