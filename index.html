@@ -1316,24 +1316,7 @@ function App() {
             <div style={{ fontSize:11, opacity:0.65, marginTop:4 }}>{monthDays.length}日分の記録</div>
           </div>
 
-          {monthOptions.length>0&&(
-            <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
-              <div style={{ background:'#5B4FCF', color:'#fff', padding:'10px 14px', fontSize:13, fontWeight:700 }}>⭐ オプション明細</div>
-              {monthOptions.map((o,i)=>(
-                <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'9px 14px', background:i%2?'#F8FAFC':'#fff', borderBottom:'1px solid #EEF1F5' }}>
-                  <div>
-                    <div style={{ fontSize:13, color:'#1A3A5C' }}>{o.label||'（内容未記入）'}</div>
-                    <div style={{ fontSize:11, color:'#AAB0BC' }}>{dateLabel(o.date)}</div>
-                  </div>
-                  <div style={{ fontWeight:700, color:o.amount<0?'#E05252':'#5B4FCF', fontSize:14 }}>{o.amount>=0?'+':''}¥{fmt(o.amount)}</div>
-                </div>
-              ))}
-              <div style={{ display:'flex', justifyContent:'space-between', padding:'9px 14px', background:'#F3F0FF', borderTop:'1.5px solid #CFC8F5' }}>
-                <span style={{ fontWeight:700, color:'#5B4FCF', fontSize:13 }}>オプション合計</span>
-                <span style={{ fontWeight:700, color:monthOptionTotal<0?'#E05252':'#5B4FCF', fontSize:15 }}>{monthOptionTotal>=0?'+':''}¥{fmt(monthOptionTotal)}</span>
-              </div>
-            </div>
-          )}
+
           {monthDays.length>0?(
             <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
               <div style={{ background:'#1A3A5C', color:'#fff', padding:'10px 14px', fontSize:13, fontWeight:700 }}>日別売上</div>
