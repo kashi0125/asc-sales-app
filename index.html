@@ -1420,23 +1420,7 @@ function App() {
               )}
             </div>
           ))}
-          {allStaffMonthSummary.some(s=>s.total>0)&&(
-            <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
-              <div style={{ background:'#D97706', color:'#fff', padding:'10px 14px', fontSize:13, fontWeight:700 }}>🏆 今月のランキング</div>
-              {[...allStaffMonthSummary].filter(s=>s.total>0).sort((a,b)=>b.total-a.total).map((s,rank)=>(
-                <div key={s.uid} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 14px', background:rank%2?'#F8FAFC':'#fff', borderBottom:'1px solid #EEF1F5' }}>
-                  <div style={{ fontSize:rank===0?22:16, fontWeight:700, width:28, textAlign:'center' }}>
-                    {rank===0?'🥇':rank===1?'🥈':rank===2?'🥉':`${rank+1}`}
-                  </div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontWeight:700, fontSize:14, color:'#1A3A5C' }}>{s.name}</div>
-                    <div style={{ fontSize:11, color:'#888' }}>{s.dayCount}日稼働</div>
-                  </div>
-                  <div style={{ fontWeight:800, fontSize:16, color:staffColor(s.idx) }}>¥{fmt(s.total)}</div>
-                </div>
-              ))}
-            </div>
-          )}
+
           {allStaffMonthSummary.every(s=>s.total===0)&&(
             <div style={{ textAlign:'center', padding:'40px 20px', color:'#AAB0BC' }}>
               <div style={{ fontSize:40, marginBottom:12 }}>📭</div>
