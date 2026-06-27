@@ -10,7 +10,7 @@
   <!-- Firebase -->
   <script type="module" id="firebase-init">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, sendPasswordResetEmail, EmailAuthProvider, reauthenticateWithCredential, updatePassword, deleteUser } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
     import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, query } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -27,7 +27,7 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    window.__firebase = { auth, db, signInWithEmailAndPassword, signOut, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, query };
+    window.__firebase = { auth, db, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, sendPasswordResetEmail, EmailAuthProvider, reauthenticateWithCredential, updatePassword, deleteUser, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, query };
   </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -163,8 +163,7 @@ function LoginScreen() {
     if (!email.trim()) { setError('メールアドレスを入力してください'); return; }
     setLoading(true); setError('');
     try {
-      const { auth } = getFirebase();
-      const { sendPasswordResetEmail } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+      const { auth, sendPasswordResetEmail } = getFirebase();
       await sendPasswordResetEmail(auth, email.trim());
       setMode('resetDone');
     } catch(e) {
@@ -179,8 +178,7 @@ function LoginScreen() {
     setLoading(true); setError('');
     try {
       // Firebase AuthでユーザーをCreate
-      const { auth, db, doc, setDoc } = getFirebase();
-      const { createUserWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+      const { auth, db, doc, setDoc, createUserWithEmailAndPassword } = getFirebase();
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       // Firestoreにプロフィールを登録（roleはstaffで固定）
       await setDoc(doc(db, 'users', cred.user.uid), {
@@ -433,8 +431,7 @@ function AccountModal({ onClose, authUser, userProfile, onDeleteAccount }) {
     if (newPass !== confirmPass) { showMsg('新しいパスワードが一致しません'); return; }
     setLoading(true); setMsg('');
     try {
-      const { auth } = getFirebase();
-      const { EmailAuthProvider, reauthenticateWithCredential, updatePassword } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+      const { auth, EmailAuthProvider, reauthenticateWithCredential, updatePassword } = getFirebase();
       const cred = EmailAuthProvider.credential(authUser.email, currentPass);
       await reauthenticateWithCredential(authUser, cred);
       await updatePassword(authUser, newPass);
@@ -455,8 +452,7 @@ function AccountModal({ onClose, authUser, userProfile, onDeleteAccount }) {
     if (!window.confirm('本当にアカウントを削除しますか？\nこの操作は取り消せません。')) return;
     setLoading(true); setMsg('');
     try {
-      const { auth, db, doc, deleteDoc, collection, getDocs } = getFirebase();
-      const { EmailAuthProvider, reauthenticateWithCredential, deleteUser } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+      const { auth, db, doc, deleteDoc, collection, getDocs, EmailAuthProvider, reauthenticateWithCredential, deleteUser } = getFirebase();
       // 再認証
       const cred = EmailAuthProvider.credential(authUser.email, deletePass);
       await reauthenticateWithCredential(authUser, cred);
