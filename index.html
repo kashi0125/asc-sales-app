@@ -756,6 +756,113 @@ function PrintView({ onBack, staffName, currentMonth, monthDays, monthBaseTotal,
   );
 }
 
+
+// ─── 古いデータ削除コンポーネント（管理者用） ───
+function OldDataCleaner() {
+  const [status, setStatus]   = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const getOneYearAgo = () => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    return d.toISOString().slice(0, 10); // YYYY-MM-DD
+  };
+
+  // 1年以上前の記録を削除（画像は残す）
+  const handleDeleteOldRecords = async () => {
+    const cutoff = getOneYearAgo();
+    if (!window.confirm(`${cutoff} より前の記録データを削除しますか？\n画像は残ります。この操作は取り消せません。`)) return;
+    setLoading(true); setStatus('');
+    try {
+      const { db, collection, getDocs, doc, setDoc } = getFirebase();
+      const snap = await getDocs(collection(db, 'records'));
+      let count = 0;
+      for (const d of snap.docs) {
+        const { date, entry } = d.data();
+        if (date < cutoff) {
+          // 画像だけ残してentryの数値データを削除
+          const newEntry = { options: [], branches: [] };
+          SIZES.forEach(s => { newEntry[s] = { delivery: '', pickup: '' }; });
+          if (entry?.image)  newEntry.image  = entry.image;
+          if (entry?.image2) newEntry.image2 = entry.image2;
+          await setDoc(doc(db, 'records', d.id), { ...d.data(), entry: newEntry });
+          count++;
+        }
+      }
+      setStatus(`✅ ${count}件の古い記録データを削除しました`);
+    } catch(e) {
+      setStatus('エラー: ' + e.message);
+    }
+    setLoading(false);
+  };
+
+  // 1年以上前の画像のみ削除（記録データは残す）
+  const handleDeleteOldImages = async () => {
+    const cutoff = getOneYearAgo();
+    if (!window.confirm(`${cutoff} より前の画像を削除しますか？\n件数データは残ります。この操作は取り消せません。`)) return;
+    setLoading(true); setStatus('');
+    try {
+      const { db, collection, getDocs, doc, setDoc } = getFirebase();
+      const snap = await getDocs(collection(db, 'records'));
+      let count = 0;
+      for (const d of snap.docs) {
+        const { date, entry } = d.data();
+        if (date < cutoff && (entry?.image || entry?.image2)) {
+          const newEntry = { ...entry };
+          delete newEntry.image;
+          delete newEntry.image2;
+          await setDoc(doc(db, 'records', d.id), { ...d.data(), entry: newEntry });
+          count++;
+        }
+      }
+      setStatus(`✅ ${count}件の古い画像を削除しました`);
+    } catch(e) {
+      setStatus('エラー: ' + e.message);
+    }
+    setLoading(false);
+  };
+
+  const cutoff = getOneYearAgo();
+
+  return (
+    <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginTop:16, marginBottom:12 }}>
+      <div style={{ background:'#374151', color:'#fff', padding:'10px 14px', fontSize:13, fontWeight:700 }}>
+        🗂️ データ容量管理
+      </div>
+      <div style={{ padding:'14px' }}>
+        <div style={{ fontSize:12, color:'#666', marginBottom:12, lineHeight:1.7 }}>
+          削除対象：<b>{cutoff}</b> より前のデータ
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <button onClick={handleDeleteOldRecords} disabled={loading} style={{
+            padding:'12px 14px', borderRadius:10, border:'1.5px solid #FCA5A5',
+            background:'#FFF', color:'#DC2626', fontSize:13, fontWeight:700,
+            cursor: loading?'not-allowed':'pointer', textAlign:'left'
+          }}>
+            🗑️ 1年以上前の記録を削除<br/>
+            <span style={{ fontSize:11, fontWeight:400, color:'#888' }}>件数データを削除・画像は残す</span>
+          </button>
+          <button onClick={handleDeleteOldImages} disabled={loading} style={{
+            padding:'12px 14px', borderRadius:10, border:'1.5px solid #FCD34D',
+            background:'#FFF', color:'#D97706', fontSize:13, fontWeight:700,
+            cursor: loading?'not-allowed':'pointer', textAlign:'left'
+          }}>
+            🖼️ 1年以上前の画像を削除<br/>
+            <span style={{ fontSize:11, fontWeight:400, color:'#888' }}>画像のみ削除・件数データは残す</span>
+          </button>
+        </div>
+        {loading && <div style={{ marginTop:10, fontSize:13, color:'#888', textAlign:'center' }}>処理中...</div>}
+        {status && (
+          <div style={{ marginTop:10, padding:'10px 12px', borderRadius:8, fontSize:13,
+            background: status.startsWith('✅')?'#F0FDF4':'#FEF2F2',
+            color: status.startsWith('✅')?'#15803D':'#DC2626'
+          }}>{status}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── メインアプリ ───
 function App() {
   const [authUser, setAuthUser]           = useState(undefined); // undefined=初期化中
@@ -1391,10 +1498,16 @@ function App() {
                 </div>
               </div>
               {s.dayCount>0&&(
-                <div style={{ display:'flex', gap:14, fontSize:12, color:'#888', borderTop:'1px solid #EEF1F5', paddingTop:6 }}>
-                  <span>基本 ¥{fmt(s.base)}</span>
-                  {s.opt!==0&&<span>オプション {s.opt>=0?'+':''}¥{fmt(s.opt)}</span>}
-                  <span style={{ marginLeft:'auto', color:'#aaa', fontSize:11 }}>詳細 ›</span>
+                <div style={{ borderTop:'1px solid #EEF1F5', paddingTop:6 }}>
+                  <div style={{ display:'flex', gap:14, fontSize:12, color:'#888', marginBottom:4 }}>
+                    <span>基本 ¥{fmt(s.base)}</span>
+                    {s.opt!==0&&<span>オプション {s.opt>=0?'+':''}¥{fmt(s.opt)}</span>}
+                    <span style={{ marginLeft:'auto', color:'#aaa', fontSize:11 }}>詳細 ›</span>
+                  </div>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:12 }}>
+                    <span style={{ color:'#5577AA', fontWeight:600 }}>１日平均</span>
+                    <span style={{ color:'#5577AA', fontWeight:700 }}>¥{fmt(Math.round(s.total / s.dayCount))}</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -1406,6 +1519,9 @@ function App() {
               <div style={{ fontWeight:600 }}>この月の記録はまだありません</div>
             </div>
           )}
+
+          {/* 管理者用：古いデータ削除 */}
+          <OldDataCleaner />
         </div>
       )}
 
