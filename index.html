@@ -877,6 +877,7 @@ function App() {
   const [saving, setSaving]               = useState(false);
   const [imageData, setImageData]         = useState(null);  // 作業確認書
   const [imageData2, setImageData2]       = useState(null);  // その他
+  const [memo, setMemo]                   = useState('');     // メモ
   const [imageUploading, setImageUploading]   = useState(false);
   const [imageUploading2, setImageUploading2] = useState(false);
   const [printView, setPrintView]         = useState(false);
@@ -970,10 +971,12 @@ function App() {
       setEntry(copy);
       setImageData(copy.image || null);
       setImageData2(copy.image2 || null);
+      setMemo(copy.memo || '');
     } else {
       setEntry(emptyEntry());
       setImageData(null);
       setImageData2(null);
+      setMemo('');
     }
     setSaved(false);
   }, [selectedDate, records, currentStaffId]);
@@ -998,6 +1001,8 @@ function App() {
       if (imageData) entryToSave.image = imageData;
       if (imageData2) entryToSave.image2 = imageData2;
       else delete entryToSave.image2;
+      if (memo.trim()) entryToSave.memo = memo.trim();
+      else delete entryToSave.memo;
       await saveRecord(currentStaffId, selectedDate, entryToSave);
       setSaved(true);
     } catch(e) {
@@ -1365,6 +1370,20 @@ function App() {
               )}
             </div>
           ))}
+
+          {/* メモ */}
+          <div style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', marginBottom:12 }}>
+            <div style={{ background:'#4B5563', color:'#fff', padding:'10px 14px', fontSize:13, fontWeight:700 }}>📝 メモ</div>
+            <div style={{ padding:12 }}>
+              <textarea
+                value={memo}
+                onChange={e=>{ setMemo(e.target.value); setSaved(false); }}
+                placeholder="自由にメモを入力できます"
+                rows={3}
+                style={{ width:'100%', padding:'10px 12px', fontSize:14, border:'1.5px solid #D0D7E3', borderRadius:10, outline:'none', color:'#1A3A5C', resize:'vertical', fontFamily:'inherit', lineHeight:1.6, boxSizing:'border-box' }}
+              />
+            </div>
+          </div>
 
           {/* ボタン */}
           <div style={{ display:'flex', gap:10, marginBottom:10 }}>
