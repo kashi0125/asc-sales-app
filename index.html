@@ -1,562 +1,159 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>車両メンテナンス記録</title>
-<meta name="theme-color" content="#1f6f5c">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon-192.png" type="image/png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="メンテ記録">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<style>
-:root{
-  --bg:#f4f5f2;--card:#fff;--ink:#1d2321;--sub:#66706c;--line:#e2e5e1;
-  --accent:#1f6f5c;--accent-ink:#fff;--warn:#b7791f;--warn-bg:#fdf3dc;--bad:#c0392b;--bad-bg:#fbe5e2;--ok-bg:#e4f2ec;
-  --radius:14px;
-}
-@media (prefers-color-scheme:dark){
-  :root{--bg:#141816;--card:#1e2421;--ink:#e8ece9;--sub:#9aa5a0;--line:#2e3632;
-  --accent:#4fb393;--accent-ink:#0f1412;--warn:#e0a64a;--warn-bg:#3a2f18;--bad:#ef6f61;--bad-bg:#3d1f1c;--ok-bg:#1d3a30;}
-}
-*{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--ink);
-  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:16px;line-height:1.5}
-header{position:sticky;top:0;z-index:5;background:var(--accent);color:var(--accent-ink);
-  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:10px}
-header h1{font-size:18px;margin:0;flex:1}
-header button{background:transparent;border:1px solid currentColor;color:inherit;border-radius:999px;padding:4px 12px;font-size:13px}
-main{max-width:720px;margin:0 auto;padding:16px 16px 110px}
-.banner{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:14px}
-h2{font-size:15px;color:var(--sub);margin:22px 0 8px;font-weight:600}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:10px}
-.vcard{display:flex;gap:12px;align-items:center;cursor:pointer}
-.vicon{font-size:30px;width:48px;height:48px;display:grid;place-items:center;background:var(--ok-bg);border-radius:12px;flex:none}
-img.vicon{object-fit:cover;padding:0}
-.vphoto{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:var(--radius);margin-bottom:12px;background:var(--ok-bg)}
-.photo-box{aspect-ratio:16/10;border:1px dashed var(--line);border-radius:12px;background:var(--bg);display:grid;place-items:center;overflow:hidden;color:var(--sub);font-size:14px}
-.photo-box img{width:100%;height:100%;object-fit:cover}
-.photo-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.vmain{flex:1;min-width:0}
-.vname{font-weight:700;font-size:17px}
-.vsub{color:var(--sub);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.badge{display:inline-block;white-space:nowrap;flex:none;font-size:12px;font-weight:700;border-radius:999px;padding:2px 9px}
-.b1{background:var(--warn-bg);color:var(--warn)}.b2{background:var(--bad-bg);color:var(--bad)}.b0{background:var(--ok-bg);color:var(--accent)}
-.due{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
-.due:first-child{border-top:0;padding-top:0}.due:last-child{padding-bottom:0}
-.due .t{font-weight:600}.due .s{font-size:13px;color:var(--sub)}
-.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
-.stat b{display:block;font-size:17px}.stat span{font-size:12px;color:var(--sub)}
-.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px}
-.chip{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:5px 12px;font-size:13px}
-.chip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-.rec{cursor:pointer}
-.rec .top{display:flex;justify-content:space-between;gap:8px}
-.rec .cat{font-weight:700}.rec .date{color:var(--sub);font-size:13px}
-.rec .meta{font-size:13px;color:var(--sub);margin-top:2px}
-.rec .memo{font-size:14px;margin-top:6px;white-space:pre-wrap}
-.memo-box{white-space:pre-wrap;font-size:14px}
-.row{display:flex;gap:8px;align-items:center}
-.back{background:none;border:0;color:var(--accent);font-size:15px;padding:0;margin-bottom:8px}
-.btn{border:0;border-radius:12px;padding:12px 16px;font-size:15px;font-weight:600;background:var(--accent);color:var(--accent-ink);cursor:pointer}
-.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
-.btn.danger{background:transparent;color:var(--bad);border:1px solid var(--bad)}
-.btn.small{padding:6px 12px;font-size:13px;border-radius:10px}
-.fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));border-radius:999px;padding:14px 22px;box-shadow:0 6px 18px rgba(0,0,0,.2);z-index:4}
-.empty{text-align:center;color:var(--sub);padding:30px 10px}
-.center{text-align:center;padding:60px 16px}
-dialog{border:0;border-radius:18px;padding:0;width:min(560px,94vw);max-height:90vh;background:var(--card);color:var(--ink)}
-dialog::backdrop{background:rgba(0,0,0,.45)}
-dialog form{padding:18px;overflow:auto;max-height:90vh}
-dialog h3{margin:0 0 12px;font-size:18px}
-label{display:block;font-size:13px;color:var(--sub);margin:10px 0 4px}
-input,select,textarea{width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
-textarea{min-height:70px;resize:vertical}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
-.grid2.shopcost{grid-template-columns:1fr 7.5em}
-.next{background:var(--ok-bg);border-radius:12px;padding:4px 12px 12px;margin-top:12px}
-.hint{font-size:12px;color:var(--sub);margin-top:4px}
-.actions{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap}
-.actions .sp{flex:1}
-.seg{display:flex;gap:6px}.seg label{flex:1;margin:0}
-.seg input{display:none}
-.seg span{display:block;text-align:center;border:1px solid var(--line);border-radius:10px;padding:9px;color:var(--ink);font-size:15px}
-.seg input:checked+span{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-.menu{display:flex;gap:8px;flex-wrap:wrap;margin-top:24px}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>ASC 売上記録アプリ</title>
+  <!-- ホーム画面アプリ用 -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#1A3A5C">
+  <link rel="icon" href="favicon-32.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="ASC売上">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <!-- Firebase -->
+  <script type="module" id="firebase-init">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, sendPasswordResetEmail, EmailAuthProvider, reauthenticateWithCredential, updatePassword, deleteUser } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDSMlDysOQfsaQDmRxHepIcII301GEmXrc",
+      authDomain: "asc-sales.firebaseapp.com",
+      projectId: "asc-sales",
+      storageBucket: "asc-sales.firebasestorage.app",
+      messagingSenderId: "397341942869",
+      appId: "1:397341942869:web:b291915f87fe834d9ee0dc",
+      measurementId: "G-R17Y71S3TC"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    window.__firebase = { auth, db, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, sendPasswordResetEmail, EmailAuthProvider, reauthenticateWithCredential, updatePassword, deleteUser, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, query, where };
+    // 準備完了をアプリ側へ通知（ポーリング不要に）
+    window.dispatchEvent(new Event('firebase-ready'));
+  </script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #F2F4F7; font-family: 'Helvetica Neue', Arial, sans-serif; }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { width: 36px; height: 36px; border: 3px solid #ddd; border-top-color: #2563A8; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @media print {
+      .no-print { display: none !important; }
+      body { margin: 0; background: #fff; }
+      .print-root { padding: 16px !important; }
+    }
+  </style>
 </head>
 <body>
-<header>
-  <h1>🔧 車両メンテナンス記録</h1>
-  <span id="who" style="font-size:12px;opacity:.85"></span>
-  <button id="logoutBtn" hidden>ログアウト</button>
-</header>
-<main id="app"><div class="center">読み込み中…</div></main>
-<button class="btn fab" id="fab" hidden>＋ 記録</button>
+<div id="root"></div>
+<script>const{useState,useEffect,useCallback,useRef}=React,DEFAULT_RATES={SS:{delivery:260,pickup:100},S:{delivery:520,pickup:150},A:{delivery:750,pickup:330},B:{delivery:800,pickup:430},C:{delivery:1580,pickup:540},D:{delivery:2600,pickup:900},E:{delivery:3090,pickup:1550},F:{delivery:3280,pickup:2290},G:{delivery:4080,pickup:2780}},SIZES=Object.keys(DEFAULT_RATES),getRates=()=>window.__rates||DEFAULT_RATES,STAFF_COLORS=["#2563A8","#16A34A","#DC2626","#9333EA","#D97706","#0891B2","#DB2777","#65A30D","#EA580C","#7C3AED"],today=()=>{const e=new Date;return`${e.getFullYear()}-${String(e.getMonth()+1).padStart(2,"0")}-${String(e.getDate()).padStart(2,"0")}`},monthKey=e=>e.slice(0,7),fmt=e=>e.toLocaleString("ja-JP"),staffColor=e=>STAFF_COLORS[e%STAFF_COLORS.length],dateLabel=e=>{const d=new Date(e+"T00:00:00");return`${d.getMonth()+1}/${d.getDate()}(${"日月火水木金土"[d.getDay()]})`},monthLabel=e=>{const[d,i]=e.split("-");return`${d}年${parseInt(i)}月`},emptyEntry=()=>{const e={options:[]};return SIZES.forEach(d=>{e[d]={delivery:"",pickup:""}}),e},calcBaseTotal=e=>{const d=getRates();return SIZES.reduce((i,c)=>{var s,m;return i+(parseInt((s=e[c])==null?void 0:s.delivery)||0)*d[c].delivery+(parseInt((m=e[c])==null?void 0:m.pickup)||0)*d[c].pickup},0)},calcOptionTotal=e=>(e.options||[]).reduce((d,i)=>d+(parseInt(i.amount)||0),0),calcDayTotal=e=>calcBaseTotal(e)+calcOptionTotal(e),formatDetail=e=>{const d=s=>SIZES.map(m=>{var y;const u=parseInt((y=e==null?void 0:e[m])==null?void 0:y[s])||0;return u>0?`${m}${u}`:""}).filter(Boolean).join(" "),i=d("delivery"),c=d("pickup");return[i&&`[配達] ${i}`,c&&`[集荷] ${c}`].filter(Boolean)},DetailText=({e})=>formatDetail(e).map(d=>React.createElement("span",{key:d,style:{display:"inline-block",whiteSpace:"nowrap",marginRight:10}},d)),hasSalesData=e=>SIZES.some(d=>{var i,c;return(parseInt((i=e==null?void 0:e[d])==null?void 0:i.delivery)||0)+(parseInt((c=e==null?void 0:e[d])==null?void 0:c.pickup)||0)>0})||((e==null?void 0:e.options)||[]).some(d=>parseInt(d.amount)||0),getFirebase=()=>window.__firebase;async function loadUserProfile(e){const{db:d,doc:i,getDoc:c}=getFirebase(),s=await c(i(d,"users",e));return s.exists()?s.data():null}async function loadAllStaff(e,d,i){return(await i(d(e,"users"))).docs.map(s=>({uid:s.id,...s.data()}))}async function saveRecord(e,d,i){const{db:c,doc:s,setDoc:m}=getFirebase();await m(s(c,"records",`${e}_${d}`),{uid:e,date:d,entry:i})}async function deleteRecord(e,d){const{db:i,doc:c,deleteDoc:s}=getFirebase();await s(c(i,"records",`${e}_${d}`)),await s(c(i,"recordImages",`${e}_${d}`))}async function saveImages(e,d,i,c){const{db:s,doc:m,setDoc:u,deleteDoc:y}=getFirebase(),g=m(s,"recordImages",`${e}_${d}`);if(!i&&!c){await y(g);return}const p={uid:e,date:d};i&&(p.image=i),c&&(p.image2=c),await u(g,p)}async function deleteAllUserData(e){const{db:d,collection:i,getDocs:c,deleteDoc:s,query:m,where:u}=getFirebase();for(const y of["records","recordImages"]){const g=await c(m(i(d,y),u("uid","==",e)));for(const p of g.docs)await s(p.ref)}}function compressImage(e,d=1200,i=.8){return new Promise((c,s)=>{const m=new FileReader;m.onload=u=>{const y=new Image;y.onload=()=>{const g=Math.min(1,d/Math.max(y.width,y.height)),p=Math.round(y.width*g),S=Math.round(y.height*g),A=document.createElement("canvas");A.width=p,A.height=S,A.getContext("2d").drawImage(y,0,0,p,S),c(A.toDataURL("image/jpeg",i))},y.onerror=s,y.src=u.target.result},m.onerror=s,m.readAsDataURL(e)})}function LoginScreen(){const[e,d]=useState("login"),[i,c]=useState(""),[s,m]=useState(""),[u,y]=useState(""),[g,p]=useState(""),[S,A]=useState(!1),[a,x]=useState(!1),v=async()=>{if(!(!i||!s)){A(!0),p("");try{const{auth:r,signInWithEmailAndPassword:z}=getFirebase();await z(r,i,s)}catch{p("メールアドレスまたはパスワードが正しくありません")}A(!1)}},n=async()=>{if(!i.trim()){p("メールアドレスを入力してください");return}A(!0),p("");try{const{auth:r,sendPasswordResetEmail:z}=getFirebase();await z(r,i.trim()),d("resetDone")}catch{p("送信に失敗しました。メールアドレスを確認してください")}A(!1)},b=async()=>{if(!i||!s||!u.trim()){p("すべての項目を入力してください");return}if(s.length<6){p("パスワードは6文字以上にしてください");return}A(!0),p("");try{const{auth:r,db:z,doc:w,setDoc:F,createUserWithEmailAndPassword:E}=getFirebase(),h=await E(r,i,s);await F(w(z,"users",h.user.uid),{name:u.trim(),email:i.toLowerCase(),role:"staff"}),x(!0)}catch(r){r.code==="auth/email-already-in-use"?p("このメールアドレスはすでに登録されています"):p("登録に失敗しました: "+r.message)}A(!1)},f=r=>{d(r),p(""),x(!1)};return a?React.createElement("div",{style:{minHeight:"100vh",background:"linear-gradient(135deg,#1A3A5C 0%,#2563A8 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}},React.createElement("div",{style:{background:"#fff",borderRadius:20,padding:"32px 24px",width:"100%",maxWidth:380,textAlign:"center"}},React.createElement("div",{style:{fontSize:48,marginBottom:16}},"✅"),React.createElement("div",{style:{fontSize:20,fontWeight:800,color:"#1A3A5C",marginBottom:8}},"登録完了！"),React.createElement("div",{style:{fontSize:13,color:"#666",marginBottom:24}},"アカウントが作成されました。",React.createElement("br",null),"そのままログインできます。"),React.createElement("button",{onClick:()=>f("login"),style:{width:"100%",padding:"14px",borderRadius:12,border:"none",background:"#1A3A5C",color:"#fff",fontSize:16,fontWeight:700,cursor:"pointer"}},"ログイン画面へ"))):e==="resetDone"?React.createElement("div",{style:{minHeight:"100vh",background:"linear-gradient(135deg,#1A3A5C 0%,#2563A8 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}},React.createElement("div",{style:{background:"#fff",borderRadius:20,padding:"32px 24px",width:"100%",maxWidth:380,textAlign:"center"}},React.createElement("div",{style:{fontSize:48,marginBottom:16}},"📧"),React.createElement("div",{style:{fontSize:20,fontWeight:800,color:"#1A3A5C",marginBottom:8}},"メールを送信しました"),React.createElement("div",{style:{fontSize:13,color:"#666",marginBottom:8,lineHeight:1.7}},React.createElement("b",null,i)," 宛に",React.createElement("br",null),"パスワードリセット用のリンクを送信しました。"),React.createElement("div",{style:{fontSize:12,color:"#888",marginBottom:24,lineHeight:1.7}},"メールが届かない場合は迷惑メールフォルダをご確認ください。"),React.createElement("button",{onClick:()=>f("login"),style:{width:"100%",padding:"14px",borderRadius:12,border:"none",background:"#1A3A5C",color:"#fff",fontSize:16,fontWeight:700,cursor:"pointer"}},"ログイン画面に戻る"))):React.createElement("div",{style:{minHeight:"100vh",background:"linear-gradient(135deg,#1A3A5C 0%,#2563A8 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}},React.createElement("div",{style:{background:"#fff",borderRadius:20,padding:"32px 24px",width:"100%",maxWidth:380,boxShadow:"0 8px 32px rgba(0,0,0,0.18)"}},React.createElement("div",{style:{textAlign:"center",marginBottom:24}},React.createElement("div",{style:{fontSize:11,color:"#888",letterSpacing:2,marginBottom:6}},"アートセッティングデリバリー"),React.createElement("div",{style:{fontSize:24,fontWeight:800,color:"#1A3A5C"}},"ASC 売上記録")),React.createElement("div",{style:{display:"flex",background:"#F2F4F7",borderRadius:10,padding:3,marginBottom:24}},[["login","ログイン"],["register","新規登録"]].map(([r,z])=>React.createElement("button",{key:r,onClick:()=>f(r),style:{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:e===r?"#fff":"transparent",color:e===r?"#1A3A5C":"#888",fontWeight:e===r?700:400,fontSize:13,cursor:"pointer",boxShadow:e===r?"0 1px 4px rgba(0,0,0,0.1)":"none"}},z))),e==="register"&&React.createElement("div",{style:{marginBottom:14}},React.createElement("div",{style:{fontSize:12,color:"#555",marginBottom:6,fontWeight:600}},"表示名（氏名）"),React.createElement("input",{type:"text",value:u,onChange:r=>y(r.target.value),placeholder:"例：山田 太郎",style:{width:"100%",padding:"12px 14px",fontSize:15,border:"1.5px solid #D0D7E3",borderRadius:10,outline:"none",color:"#1A3A5C"}})),React.createElement("div",{style:{marginBottom:14}},React.createElement("div",{style:{fontSize:12,color:"#555",marginBottom:6,fontWeight:600}},"メールアドレス"),React.createElement("input",{type:"email",value:i,onChange:r=>c(r.target.value),placeholder:"example@mail.com",style:{width:"100%",padding:"12px 14px",fontSize:15,border:"1.5px solid #D0D7E3",borderRadius:10,outline:"none",color:"#1A3A5C"}})),e!=="reset"&&React.createElement("div",{style:{marginBottom:e==="login"?8:20}},React.createElement("div",{style:{fontSize:12,color:"#555",marginBottom:6,fontWeight:600}},"パスワード",e==="register"&&React.createElement("span",{style:{color:"#888",fontWeight:400}},"（6文字以上）")),React.createElement("input",{type:"password",value:s,onChange:r=>m(r.target.value),onKeyDown:r=>r.key==="Enter"&&(e==="login"?v():b()),placeholder:"パスワードを入力",style:{width:"100%",padding:"12px 14px",fontSize:15,border:"1.5px solid #D0D7E3",borderRadius:10,outline:"none",color:"#1A3A5C"}})),e==="login"&&React.createElement("div",{style:{textAlign:"right",marginBottom:16}},React.createElement("button",{onClick:()=>f("reset"),style:{background:"none",border:"none",color:"#2563A8",fontSize:12,cursor:"pointer",textDecoration:"underline"}},"パスワードを忘れた方")),e==="reset"&&React.createElement("div",{style:{marginBottom:16,padding:"12px",background:"#F0F5FF",borderRadius:10,fontSize:12,color:"#555",lineHeight:1.7}},"登録したメールアドレスを入力してください。",React.createElement("br",null),"パスワードリセット用のリンクをお送りします。"),g&&React.createElement("div",{style:{color:"#EF4444",fontSize:13,marginBottom:14,textAlign:"center"}},g),React.createElement("button",{onClick:e==="login"?v:e==="register"?b:n,disabled:S,style:{width:"100%",padding:"14px",borderRadius:12,border:"none",background:S?"#BCC3CF":"#1A3A5C",color:"#fff",fontSize:16,fontWeight:700,cursor:S?"not-allowed":"pointer"}},S?e==="login"?"ログイン中...":e==="register"?"登録中...":"送信中...":e==="login"?"ログイン":e==="register"?"アカウントを作成":"リセットメールを送信"),e==="reset"&&React.createElement("button",{onClick:()=>f("login"),style:{width:"100%",marginTop:10,padding:"12px",borderRadius:12,border:"1.5px solid #D0D7E3",background:"#fff",color:"#555",fontSize:14,fontWeight:600,cursor:"pointer"}},"ログインに戻る"),e==="register"&&React.createElement("div",{style:{marginTop:14,padding:"12px",background:"#F0FDF4",borderRadius:10,fontSize:12,color:"#555",lineHeight:1.7}},"※ 新規登録はスタッフ権限で作成されます。",React.createElement("br",null),"管理者権限が必要な場合は管理者に連絡してください。")))}function RatesModal({onClose:e,currentRates:d,onSaved:i}){const[c,s]=useState(JSON.parse(JSON.stringify(d))),[m,u]=useState(!1),[y,g]=useState(""),p=(a,x,v)=>{v!==""&&!/^\d+$/.test(v)||s(n=>({...n,[a]:{...n[a],[x]:v===""?"":parseInt(v)}}))},S=async()=>{for(const a of SIZES)if(!c[a].delivery||!c[a].pickup){g("すべての単価を入力してください");return}u(!0),g("");try{const{db:a,doc:x,setDoc:v}=getFirebase(),n={};SIZES.forEach(b=>{n[b]={delivery:parseInt(c[b].delivery),pickup:parseInt(c[b].pickup)}}),await v(x(a,"settings","rates"),n),window.__rates=n,i(n),g("✅ 保存しました"),setTimeout(()=>e(),800)}catch(a){g("保存に失敗しました: "+a.message)}u(!1)},A=()=>{window.confirm("単価をデフォルト値に戻しますか？")&&s(JSON.parse(JSON.stringify(DEFAULT_RATES)))};return React.createElement("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"}},React.createElement("div",{style:{background:"#fff",width:"100%",maxWidth:480,borderRadius:"18px 18px 0 0",padding:"20px 16px 32px",maxHeight:"90vh",overflowY:"auto"}},React.createElement("div",{style:{display:"flex",alignItems:"center",marginBottom:16}},React.createElement("span",{style:{fontSize:18,fontWeight:700,color:"#1A3A5C",flex:1}},"💴 単価管理"),React.createElement("button",{onClick:e,style:{background:"none",border:"none",fontSize:22,color:"#888",cursor:"pointer"}},"✕")),React.createElement("div",{style:{background:"#FFF7ED",borderRadius:10,padding:"10px 12px",marginBottom:16,fontSize:12,color:"#C2410C"}},"⚠️ 単価を変更すると過去の記録の金額表示にも影響します。"),React.createElement("div",{style:{background:"#fff",borderRadius:12,overflow:"hidden",border:"1px solid #E5E7EB",marginBottom:14}},React.createElement("div",{style:{display:"grid",gridTemplateColumns:"52px 1fr 1fr",background:"#1A3A5C",color:"#fff",padding:"8px 10px",fontSize:12,fontWeight:600,gap:6,textAlign:"center"}},React.createElement("div",null,"サイズ"),React.createElement("div",null,"配達単価（¥）"),React.createElement("div",null,"集荷単価（¥）")),SIZES.map((a,x)=>{var v,n,b,f;return React.createElement("div",{key:a,style:{display:"grid",gridTemplateColumns:"52px 1fr 1fr",alignItems:"center",gap:6,padding:"8px 10px",background:x%2===0?"#fff":"#F8FAFC",borderBottom:"1px solid #EEF1F5"}},React.createElement("div",{style:{fontWeight:700,fontSize:16,color:"#1A3A5C",textAlign:"center"}},a),React.createElement("input",{type:"number",inputMode:"numeric",min:"0",value:(n=(v=c[a])==null?void 0:v.delivery)!=null?n:"",onChange:r=>p(a,"delivery",r.target.value),style:{width:"100%",padding:"8px 6px",fontSize:15,textAlign:"center",border:"1.5px solid #D0D7E3",borderRadius:8,outline:"none",color:"#2563A8",fontWeight:600,background:"#F5F8FF"}}),React.createElement("input",{type:"number",inputMode:"numeric",min:"0",value:(f=(b=c[a])==null?void 0:b.pickup)!=null?f:"",onChange:r=>p(a,"pickup",r.target.value),style:{width:"100%",padding:"8px 6px",fontSize:15,textAlign:"center",border:"1.5px solid #D0D7E3",borderRadius:8,outline:"none",color:"#E07B39",fontWeight:600,background:"#FFF8F5"}}))})),y&&React.createElement("div",{style:{padding:"10px 12px",borderRadius:8,marginBottom:12,fontSize:13,background:y.startsWith("✅")?"#F0FDF4":"#FEF2F2",color:y.startsWith("✅")?"#15803D":"#DC2626"}},y),React.createElement("div",{style:{display:"flex",gap:10}},React.createElement("button",{onClick:A,style:{padding:"12px 16px",borderRadius:12,border:"1.5px solid #D0D7E3",background:"#fff",color:"#555",fontSize:13,fontWeight:600,cursor:"pointer"}},"🔄 デフォルトに戻す"),React.createElement("button",{onClick:S,disabled:m,style:{flex:1,padding:"14px",borderRadius:12,border:"none",background:m?"#BCC3CF":"#1A3A5C",color:"#fff",fontSize:15,fontWeight:700,cursor:m?"not-allowed":"pointer"}},m?"保存中...":"💾 保存する"))))}function AccountModal({onClose:e,authUser:d,userProfile:i,onDeleteAccount:c}){const[s,m]=useState("password"),[u,y]=useState(""),[g,p]=useState(""),[S,A]=useState(""),[a,x]=useState(""),[v,n]=useState(""),[b,f]=useState("error"),[r,z]=useState(!1),w=(h,W="error")=>{n(h),f(W)},F=async()=>{if(!u||!g||!S){w("すべて入力してください");return}if(g.length<6){w("新しいパスワードは6文字以上にしてください");return}if(g!==S){w("新しいパスワードが一致しません");return}z(!0),n("");try{const{auth:h,EmailAuthProvider:W,reauthenticateWithCredential:M,updatePassword:P}=getFirebase(),Y=W.credential(d.email,u);await M(d,Y),await P(d,g),w("✅ パスワードを変更しました","success"),y(""),p(""),A("")}catch(h){h.code==="auth/wrong-password"||h.code==="auth/invalid-credential"?w("現在のパスワードが正しくありません"):w("エラー: "+h.message)}z(!1)},E=async()=>{if(!a){w("パスワードを入力してください");return}if(window.confirm(`本当にアカウントを削除しますか？
+この操作は取り消せません。`)){z(!0),n("");try{const{db:h,doc:W,deleteDoc:M,EmailAuthProvider:P,reauthenticateWithCredential:Y,deleteUser:Q}=getFirebase(),J=P.credential(d.email,a);await Y(d,J),await deleteAllUserData(d.uid),await M(W(h,"users",d.uid)),await Q(d),c()}catch(h){h.code==="auth/wrong-password"||h.code==="auth/invalid-credential"?w("パスワードが正しくありません"):w("エラー: "+h.message)}z(!1)}};return React.createElement("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"}},React.createElement("div",{style:{background:"#fff",width:"100%",maxWidth:480,borderRadius:"18px 18px 0 0",padding:"20px 16px 32px",maxHeight:"85vh",overflowY:"auto"}},React.createElement("div",{style:{display:"flex",alignItems:"center",marginBottom:16}},React.createElement("span",{style:{fontSize:18,fontWeight:700,color:"#1A3A5C",flex:1}},"⚙️ アカウント設定"),React.createElement("button",{onClick:e,style:{background:"none",border:"none",fontSize:22,color:"#888",cursor:"pointer"}},"✕")),React.createElement("div",{style:{fontSize:13,color:"#666",marginBottom:16,padding:"8px 12px",background:"#F8FAFC",borderRadius:8}},i==null?void 0:i.name,"　",React.createElement("span",{style:{color:"#888"}},d.email)),React.createElement("div",{style:{display:"flex",background:"#F2F4F7",borderRadius:10,padding:3,marginBottom:20}},[["password","🔑 パスワード変更"],["delete","🗑️ 退会"]].map(([h,W])=>React.createElement("button",{key:h,onClick:()=>{m(h),n("")},style:{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:s===h?"#fff":"transparent",color:s===h?h==="delete"?"#EF4444":"#1A3A5C":"#888",fontWeight:s===h?700:400,fontSize:12,cursor:"pointer",boxShadow:s===h?"0 1px 4px rgba(0,0,0,0.1)":"none"}},W))),s==="password"&&React.createElement("div",null,[["現在のパスワード",u,y],["新しいパスワード（6文字以上）",g,p],["新しいパスワード（確認）",S,A]].map(([h,W,M])=>React.createElement("div",{key:h,style:{marginBottom:14}},React.createElement("div",{style:{fontSize:12,color:"#555",marginBottom:6,fontWeight:600}},h),React.createElement("input",{type:"password",value:W,onChange:P=>M(P.target.value),placeholder:"入力してください",style:{width:"100%",padding:"12px 14px",fontSize:15,border:"1.5px solid #D0D7E3",borderRadius:10,outline:"none",color:"#1A3A5C"}}))),v&&React.createElement("div",{style:{padding:"10px 12px",borderRadius:8,marginBottom:14,fontSize:13,background:b==="success"?"#F0FDF4":"#FEF2F2",color:b==="success"?"#15803D":"#DC2626"}},v),React.createElement("button",{onClick:F,disabled:r,style:{width:"100%",padding:"14px",borderRadius:12,border:"none",background:r?"#BCC3CF":"#1A3A5C",color:"#fff",fontSize:15,fontWeight:700,cursor:r?"not-allowed":"pointer"}},r?"変更中...":"パスワードを変更する")),s==="delete"&&React.createElement("div",null,React.createElement("div",{style:{padding:"14px",background:"#FEF2F2",borderRadius:10,marginBottom:16,fontSize:13,color:"#DC2626",lineHeight:1.7}},"⚠️ ",React.createElement("b",null,"退会すると以下が削除されます："),React.createElement("br",null),"・アカウント情報",React.createElement("br",null),"・すべての売上記録データ",React.createElement("br",null),"この操作は取り消せません。"),React.createElement("div",{style:{marginBottom:14}},React.createElement("div",{style:{fontSize:12,color:"#555",marginBottom:6,fontWeight:600}},"確認のためパスワードを入力"),React.createElement("input",{type:"password",value:a,onChange:h=>x(h.target.value),placeholder:"パスワードを入力",style:{width:"100%",padding:"12px 14px",fontSize:15,border:"1.5px solid #FCA5A5",borderRadius:10,outline:"none",color:"#1A3A5C"}})),v&&React.createElement("div",{style:{padding:"10px 12px",borderRadius:8,marginBottom:14,fontSize:13,background:"#FEF2F2",color:"#DC2626"}},v),React.createElement("button",{onClick:E,disabled:r,style:{width:"100%",padding:"14px",borderRadius:12,border:"none",background:r?"#BCC3CF":"#EF4444",color:"#fff",fontSize:15,fontWeight:700,cursor:r?"not-allowed":"pointer"}},r?"処理中...":"退会する（削除は取り消せません）"))))}function StaffModal({onClose:e,currentUid:d}){const[i,c]=useState([]),[s,m]=useState(!0),[u,y]=useState(""),[g,p]=useState("error"),[S,A]=useState(null),a=()=>{const{db:n,collection:b,getDocs:f}=getFirebase();loadAllStaff(n,b,f).then(r=>{c(r),m(!1)})};useEffect(()=>{a()},[]);const x=async(n,b)=>{if(n===d){y("自分自身の権限は変更できません"),p("error");return}if(window.confirm(`この操作で権限を「${b==="admin"?"管理者":"スタッフ"}」に変更します。よろしいですか？`)){A(n),y("");try{const{db:f,doc:r,setDoc:z}=getFirebase(),w=i.find(F=>F.uid===n);await z(r(f,"users",n),{...w,role:b}),y("✅ 権限を変更しました"),p("success"),a()}catch(f){y("エラー: "+f.message),p("error")}A(null)}},v=async(n,b)=>{if(n===d){y("自分自身は削除できません"),p("error");return}if(window.confirm(`「${b}」のアカウントを強制退会させますか？
 
-<!-- 車両フォーム -->
-<dialog id="vDlg"><form id="vForm" method="dialog">
-  <h3 id="vTitle">車両を追加</h3>
-  <div class="seg">
-    <label><input type="radio" name="type" value="car" checked><span>🚗 車</span></label>
-    <label><input type="radio" name="type" value="bike"><span>🏍️ バイク</span></label>
-  </div>
-  <label>名前（呼び名）</label><input name="name" required placeholder="例：プリウス、CB400">
-  <label>写真</label>
-  <div class="photo-box"><img id="vPhotoImg" alt="" hidden><span id="vPhotoNone">写真なし</span></div>
-  <div class="photo-btns">
-    <button type="button" class="btn ghost small" id="vShoot">📷 撮影する</button>
-    <button type="button" class="btn ghost small" id="vPick">🖼️ 選択する</button>
-    <button type="button" class="btn danger small" id="vPhotoDel" hidden>写真を消す</button>
-  </div>
-  <input type="file" id="vCam" accept="image/*" capture="environment" hidden>
-  <input type="file" id="vFile" accept="image/*" hidden>
-  <div class="grid2">
-    <div><label>メーカー</label><input name="maker" placeholder="例：ヤマハ"></div>
-    <div><label>車種</label><input name="model" placeholder="例：マジェスティS"></div>
-  </div>
-  <div class="grid2">
-    <div><label>型番</label><input name="modelCode" placeholder="例：EBD-S201P"></div>
-    <div><label>車体番号</label><input name="vin" placeholder="例：S201P-0114505"></div>
-  </div>
-  <label>ナンバー</label><input name="plate" placeholder="例：なにわ 300 あ 12-34">
-  <div class="grid2">
-    <div><label>年式</label><input name="year" placeholder="例：2015年式"></div>
-    <div><label>購入日</label><input name="purchaseDate" type="date"></div>
-  </div>
-  <div class="grid2">
-    <div><label>オイル交換の目安（km）</label><input name="oilKm" type="number" inputmode="numeric" min="0"></div>
-    <div><label>オイル交換の目安（か月）</label><input name="oilMonths" type="number" inputmode="numeric" min="0"></div>
-  </div>
-  <p class="hint">オイル交換を記録するとき、ここの目安から「次回」を自動で入れます。</p>
-  <label>メモ</label><textarea name="memo" placeholder="オイルの銘柄・量、タイヤサイズ、よく行くお店など"></textarea>
-  <div class="actions">
-    <button type="button" class="btn danger small" id="vDel" hidden>削除</button>
-    <span class="sp"></span>
-    <button type="button" class="btn ghost" data-close>キャンセル</button>
-    <button type="submit" class="btn">保存</button>
-  </div>
-</form></dialog>
+・プロフィール情報を削除
+・売上データをすべて削除
 
-<!-- 記録フォーム -->
-<dialog id="rDlg"><form id="rForm" method="dialog">
-  <h3 id="rTitle">記録を追加</h3>
-  <label>車両</label><select name="vehicleId" required></select>
-  <div class="grid2">
-    <div><label>日付</label><input name="date" type="date" required></div>
-    <div><label>走行距離（km）</label><input name="odo" type="number" inputmode="numeric" min="0"></div>
+この操作は取り消せません。`)){A(n),y("");try{const{db:f,doc:r,deleteDoc:z}=getFirebase();await deleteAllUserData(n),await z(r(f,"users",n)),y("✅ アカウントを削除しました。Firebaseコンソールから認証アカウントも削除してください。"),p("success"),a()}catch(f){y("エラー: "+f.message),p("error")}A(null)}};return React.createElement("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"}},React.createElement("div",{style:{background:"#fff",width:"100%",maxWidth:480,borderRadius:"18px 18px 0 0",padding:"20px 16px 32px",maxHeight:"85vh",overflowY:"auto"}},React.createElement("div",{style:{display:"flex",alignItems:"center",marginBottom:16}},React.createElement("span",{style:{fontSize:18,fontWeight:700,color:"#1A3A5C",flex:1}},"👥 スタッフ管理"),React.createElement("button",{onClick:e,style:{background:"none",border:"none",fontSize:22,color:"#888",cursor:"pointer"}},"✕")),React.createElement("div",{style:{fontSize:12,color:"#666",marginBottom:12,lineHeight:1.7}},"権限バッジをタップして管理者↔スタッフを切り替えられます。",React.createElement("br",null),"🗑️ボタンで強制退会（データ削除）できます。"),s?React.createElement("div",{style:{textAlign:"center",padding:20}},React.createElement("div",{className:"spinner",style:{margin:"0 auto"}})):i.map((n,b)=>React.createElement("div",{key:n.uid,style:{display:"flex",alignItems:"center",gap:10,padding:"12px",background:b%2?"#F8FAFC":"#fff",borderRadius:10,marginBottom:6,border:"1px solid #EEF1F5"}},React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:staffColor(b),flexShrink:0}}),React.createElement("div",{style:{flex:1}},React.createElement("div",{style:{fontWeight:700,fontSize:14,color:"#1A3A5C",display:"flex",alignItems:"center",gap:6}},n.name,n.uid===d&&React.createElement("span",{style:{fontSize:10,color:"#888",fontWeight:400}},"（自分）")),React.createElement("div",{style:{fontSize:11,color:"#888"}},n.email)),S===n.uid?React.createElement("span",{style:{fontSize:11,color:"#888"}},"更新中..."):n.uid===d?React.createElement("span",{style:{fontSize:11,padding:"4px 10px",borderRadius:6,background:"#DBEAFE",color:"#1D4ED8",fontWeight:600}},"👑 管理者"):React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},React.createElement("button",{onClick:()=>x(n.uid,n.role==="admin"?"staff":"admin"),style:{fontSize:11,padding:"4px 10px",borderRadius:6,fontWeight:600,cursor:"pointer",border:"none",background:n.role==="admin"?"#DBEAFE":"#F0FDF4",color:n.role==="admin"?"#1D4ED8":"#15803D"}},n.role==="admin"?"👑 管理者":"👤 スタッフ"),React.createElement("button",{onClick:()=>v(n.uid,n.name),style:{fontSize:13,padding:"4px 8px",borderRadius:6,border:"1.5px solid #FCA5A5",background:"#FFF",color:"#EF4444",cursor:"pointer",fontWeight:700},title:"強制退会"},"🗑️")))),u&&React.createElement("div",{style:{marginTop:12,padding:"10px 12px",borderRadius:8,fontSize:13,background:g==="success"?"#F0FDF4":"#FEF2F2",color:g==="success"?"#15803D":"#DC2626"}},u),React.createElement("button",{onClick:e,style:{width:"100%",marginTop:16,padding:14,borderRadius:12,border:"none",background:"#1A3A5C",color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer"}},"閉じる")))}function PrintView({onBack:e,staffName:d,currentMonth:i,monthDays:c,monthBaseTotal:s,monthOptionTotal:m,monthTotal:u,monthBreakdown:y,monthOptions:g}){const[p,S]=i.split("-"),A=`${p}年${parseInt(S)}月　売上明細　${d}`;return React.createElement("div",{style:{background:"#fff",minHeight:"100vh"}},React.createElement("div",{className:"no-print",style:{position:"sticky",top:0,zIndex:10,background:"#1A3A5C",color:"#fff",padding:"12px 16px",display:"flex",alignItems:"center",gap:10}},React.createElement("button",{onClick:e,style:{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:8,padding:"6px 12px",fontSize:13,cursor:"pointer"}},"← 戻る"),React.createElement("span",{style:{flex:1,fontWeight:700,fontSize:15}},"印刷プレビュー"),React.createElement("span",{style:{fontSize:11,color:"rgba(255,255,255,0.85)",textAlign:"right",lineHeight:1.5}},"🖨️ ブラウザの「印刷」メニューから",React.createElement("br",null),"PDF保存できます")),React.createElement("div",{className:"print-root",style:{padding:"20px 18px",maxWidth:680,margin:"0 auto",color:"#111"}},React.createElement("div",{style:{textAlign:"center",marginBottom:18}},React.createElement("div",{style:{fontSize:11,color:"#666",marginBottom:4}},"アートセッティングデリバリー（ASC）"),React.createElement("div",{style:{fontSize:22,fontWeight:700,borderBottom:"2px solid #1A3A5C",paddingBottom:8}},A)),React.createElement("div",{style:{border:"2px solid #1A3A5C",borderRadius:8,padding:"12px 16px",marginBottom:18,display:"flex",justifyContent:"space-between",alignItems:"center",background:"#F0F5FF"}},React.createElement("div",null,React.createElement("div",{style:{fontSize:11,color:"#555"}},"基本料金　¥",fmt(s)),React.createElement("div",{style:{fontSize:11,color:"#555"}},"オプション　",m>=0?"+":"","¥",fmt(m)),React.createElement("div",{style:{fontSize:11,color:"#555",marginTop:2}},c.length,"日分の記録")),React.createElement("div",{style:{textAlign:"right"}},React.createElement("div",{style:{fontSize:11,color:"#555",marginBottom:2}},"月間合計（税別）"),React.createElement("div",{style:{fontSize:28,fontWeight:700,color:"#1A3A5C"}},"¥",fmt(u)))),React.createElement("div",{style:{marginBottom:18}},React.createElement("div",{style:{fontWeight:700,fontSize:13,color:"#1A3A5C",borderBottom:"1.5px solid #1A3A5C",paddingBottom:4,marginBottom:6}},"日別売上"),React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12}},React.createElement("thead",null,React.createElement("tr",{style:{background:"#1A3A5C",color:"#fff"}},["日付","内訳","基本","OP","合計"].map((a,x)=>React.createElement("th",{key:a,style:{padding:"6px 8px",textAlign:x>=2?"right":"left"}},a)))),React.createElement("tbody",null,c.map(([a,x],v)=>{const n=calcBaseTotal(x),b=calcOptionTotal(x),f=formatDetail(x).length>0;return React.createElement("tr",{key:a,style:{background:v%2===0?"#fff":"#F8FAFC",borderBottom:"1px solid #E5E7EB"}},React.createElement("td",{style:{padding:"5px 8px",whiteSpace:"nowrap"}},dateLabel(a)),React.createElement("td",{style:{padding:"5px 8px",color:"#444",fontSize:11}},f?React.createElement(DetailText,{e:x}):x.memo?"":"—",x.memo&&React.createElement("div",{style:{marginTop:f?3:0,color:"#333",whiteSpace:"pre-wrap",wordBreak:"break-word",borderLeft:"2px solid #F59E0B",paddingLeft:5}},"メモ：",x.memo)),React.createElement("td",{style:{padding:"5px 8px",textAlign:"right"}},"¥",fmt(n)),React.createElement("td",{style:{padding:"5px 8px",textAlign:"right",color:b!==0?"#5B4FCF":"#ccc"}},b!==0?(b>0?"+":"")+"¥"+fmt(b):"—"),React.createElement("td",{style:{padding:"5px 8px",textAlign:"right",fontWeight:600}},"¥",fmt(n+b)))}),React.createElement("tr",{style:{background:"#EEF4FF",borderTop:"2px solid #1A3A5C",fontWeight:700}},React.createElement("td",{colSpan:2,style:{padding:"7px 8px"}},"合計"),React.createElement("td",{style:{padding:"7px 8px",textAlign:"right"}},"¥",fmt(s)),React.createElement("td",{style:{padding:"7px 8px",textAlign:"right",color:"#5B4FCF"}},m!==0?(m>0?"+":"")+"¥"+fmt(m):"—"),React.createElement("td",{style:{padding:"7px 8px",textAlign:"right",fontSize:14}},"¥",fmt(u)))))),y.length>0&&React.createElement("div",{style:{marginBottom:18}},React.createElement("div",{style:{fontWeight:700,fontSize:13,color:"#1A3A5C",borderBottom:"1.5px solid #1A3A5C",paddingBottom:4,marginBottom:6}},"サイズ別集計"),React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12}},React.createElement("thead",null,React.createElement("tr",{style:{background:"#1A3A5C",color:"#fff"}},["サイズ","配達件数","配達金額","集荷件数","集荷金額","小計"].map((a,x)=>React.createElement("th",{key:a,style:{padding:"6px 8px",textAlign:x===0?"left":"right"}},a)))),React.createElement("tbody",null,y.map((a,x)=>React.createElement("tr",{key:a.size,style:{background:x%2===0?"#fff":"#F8FAFC",borderBottom:"1px solid #E5E7EB"}},React.createElement("td",{style:{padding:"5px 8px",fontWeight:700}},a.size),React.createElement("td",{style:{padding:"5px 8px",textAlign:"right"}},a.dc>0?a.dc+"件":"—"),React.createElement("td",{style:{padding:"5px 8px",textAlign:"right"}},a.da>0?"¥"+fmt(a.da):"—"),React.createElement("td",{style:{padding:"5px 8px",textAlign:"right"}},a.pc>0?a.pc+"件":"—"),React.createElement("td",{style:{padding:"5px 8px",textAlign:"right"}},a.pa>0?"¥"+fmt(a.pa):"—"),React.createElement("td",{style:{padding:"5px 8px",textAlign:"right",fontWeight:600}},"¥",fmt(a.da+a.pa))))))),React.createElement("div",{style:{textAlign:"right",fontSize:10,color:"#aaa",marginTop:24}},"出力日：",new Date().toLocaleDateString("ja-JP"))))}function OldDataCleaner(){const[e,d]=useState(""),[i,c]=useState(!1),s=()=>{const g=new Date;return g.setFullYear(g.getFullYear()-1),g.toISOString().slice(0,10)},m=async()=>{const g=s();if(window.confirm(`${g} より前の記録データを削除しますか？
+画像は残ります。この操作は取り消せません。`)){c(!0),d("");try{const{db:p,collection:S,getDocs:A,doc:a,setDoc:x,query:v,where:n}=getFirebase(),b=await A(v(S(p,"records"),n("date","<",g)));let f=0;for(const r of b.docs){const{date:z,entry:w}=r.data();if(z<g){const F={options:[],branches:[]};SIZES.forEach(E=>{F[E]={delivery:"",pickup:""}}),w!=null&&w.image&&(F.image=w.image),w!=null&&w.image2&&(F.image2=w.image2),await x(a(p,"records",r.id),{...r.data(),entry:F}),f++}}d(`✅ ${f}件の古い記録データを削除しました`)}catch(p){d("エラー: "+p.message)}c(!1)}},u=async()=>{const g=s();if(window.confirm(`${g} より前の画像を削除しますか？
+件数データは残ります。この操作は取り消せません。`)){c(!0),d("");try{const{db:p,collection:S,getDocs:A,doc:a,setDoc:x,deleteDoc:v,query:n,where:b}=getFirebase();let f=0;const r=await A(n(S(p,"recordImages"),b("date","<",g)));for(const w of r.docs)await v(w.ref),f++;const z=await A(n(S(p,"records"),b("date","<",g)));for(const w of z.docs){const{entry:F}=w.data();if(F!=null&&F.image||F!=null&&F.image2){const E={...F};delete E.image,delete E.image2,await x(a(p,"records",w.id),{...w.data(),entry:E}),f++}}d(`✅ ${f}件の古い画像を削除しました`)}catch(p){d("エラー: "+p.message)}c(!1)}},y=s();return React.createElement("div",{style:{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",marginTop:16,marginBottom:12}},React.createElement("div",{style:{background:"#374151",color:"#fff",padding:"10px 14px",fontSize:13,fontWeight:700}},"🗂️ データ容量管理"),React.createElement("div",{style:{padding:"14px"}},React.createElement("div",{style:{fontSize:12,color:"#666",marginBottom:12,lineHeight:1.7}},"削除対象：",React.createElement("b",null,y)," より前のデータ"),React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:10}},React.createElement("button",{onClick:m,disabled:i,style:{padding:"12px 14px",borderRadius:10,border:"1.5px solid #FCA5A5",background:"#FFF",color:"#DC2626",fontSize:13,fontWeight:700,cursor:i?"not-allowed":"pointer",textAlign:"left"}},"🗑️ 1年以上前の記録を削除",React.createElement("br",null),React.createElement("span",{style:{fontSize:11,fontWeight:400,color:"#888"}},"件数データを削除・画像は残す")),React.createElement("button",{onClick:u,disabled:i,style:{padding:"12px 14px",borderRadius:10,border:"1.5px solid #FCD34D",background:"#FFF",color:"#D97706",fontSize:13,fontWeight:700,cursor:i?"not-allowed":"pointer",textAlign:"left"}},"🖼️ 1年以上前の画像を削除",React.createElement("br",null),React.createElement("span",{style:{fontSize:11,fontWeight:400,color:"#888"}},"画像のみ削除・件数データは残す"))),i&&React.createElement("div",{style:{marginTop:10,fontSize:13,color:"#888",textAlign:"center"}},"処理中..."),e&&React.createElement("div",{style:{marginTop:10,padding:"10px 12px",borderRadius:8,fontSize:13,background:e.startsWith("✅")?"#F0FDF4":"#FEF2F2",color:e.startsWith("✅")?"#15803D":"#DC2626"}},e)))}function ImageViewer({src:e,onClose:d}){const[i,c]=React.useState(1),[s,m]=React.useState(null),[u,y]=React.useState({x:0,y:0}),[g,p]=React.useState(null),S=n=>{const b=n[0].clientX-n[1].clientX,f=n[0].clientY-n[1].clientY;return Math.sqrt(b*b+f*f)};return React.createElement("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.95)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"},onTouchStart:n=>{n.touches.length===2?m(S(n.touches)):n.touches.length===1&&p({x:n.touches[0].clientX,y:n.touches[0].clientY})},onTouchMove:n=>{if(n.preventDefault(),n.touches.length===2&&s){const b=S(n.touches),f=b/s;c(r=>Math.min(Math.max(r*f,.5),5)),m(b)}else if(n.touches.length===1&&g&&i>1){const b=n.touches[0].clientX-g.x,f=n.touches[0].clientY-g.y;y(r=>({x:r.x+b,y:r.y+f})),p({x:n.touches[0].clientX,y:n.touches[0].clientY})}},onTouchEnd:()=>{m(null),p(null)}},React.createElement("img",{src:e,alt:"拡大表示",onClick:()=>{i>1?(c(1),y({x:0,y:0})):c(2.5)},style:{maxWidth:"100%",maxHeight:"100%",transform:`scale(${i}) translate(${u.x/i}px, ${u.y/i}px)`,transformOrigin:"center",transition:s?"none":"transform 0.1s",userSelect:"none",touchAction:"none"}}),React.createElement("button",{onClick:d,style:{position:"absolute",top:16,right:16,background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",borderRadius:"50%",width:44,height:44,fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}},"✕"),React.createElement("div",{style:{position:"absolute",bottom:20,left:0,right:0,textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.5)"}},"タップで2倍拡大　ピンチで自由に拡大縮小"))}function App(){var vt,ht;const[e,d]=useState(void 0),[i,c]=useState(null),[s,m]=useState("input"),[u,y]=useState(today()),[g,p]=useState({}),[S,A]=useState([]),[a,x]=useState(null),[v,n]=useState(emptyEntry()),[b,f]=useState(!1),[r,z]=useState(!1),[w,F]=useState(null),[E,h]=useState(null),[W,M]=useState(""),[P,Y]=useState(null),[Q,J]=useState(!1),[St,st]=useState(!1),[Ct,lt]=useState(!1),[At,ct]=useState(!1),[wt,tt]=useState(!1),[kt,pt]=useState(!1),[Ft,gt]=useState(DEFAULT_RATES),[q,et]=useState(!0),[ot,nt]=useState(!1),$=(i==null?void 0:i.role)==="admin",it=$?monthKey(u):null,U=useRef(0),H=useRef(!1);useEffect(()=>{let t=null;const o=()=>{const{auth:l,onAuthStateChanged:C,db:k,doc:B,getDoc:D}=window.__firebase;D(B(k,"settings","rates")).then(R=>{R.exists()&&(window.__rates=R.data(),gt(R.data()))}),t=C(l,async R=>{if(R){const _=await loadUserProfile(R.uid);c(_)}else c(null);d(R)})};return window.__firebase?o():window.addEventListener("firebase-ready",o,{once:!0}),()=>{window.removeEventListener("firebase-ready",o),t&&t()}},[]),useEffect(()=>{if(!(!e||!i))if($){const{db:t,collection:o,getDocs:l}=window.__firebase;loadAllStaff(t,o,l).then(C=>{A(C),x(k=>k||e.uid)})}else A([{uid:e.uid,...i}]),x(e.uid)},[e,i]),useEffect(()=>{if(!e||!i)return;et(!0);const{db:t,collection:o,onSnapshot:l,query:C,where:k}=window.__firebase,B=$?C(o(t,"records"),k("date",">=",`${it}-01`),k("date","<=",`${it}-31`)):C(o(t,"records"),k("uid","==",e.uid)),D=l(B,R=>{const _={};R.docs.forEach(Z=>{const{uid:N,date:Pt,entry:Ht}=Z.data();_[N]||(_[N]={}),_[N][Pt]=Ht}),p(_),et(!1)},R=>{console.error(R),et(!1),alert("データの読み込みに失敗しました: "+R.message)});return()=>D()},[e,i,it]),useEffect(()=>{if(!e||!i||!a)return;const t=++U.current;H.current=!1,F(null),h(null),nt(!0);const{db:o,doc:l,getDoc:C}=window.__firebase;C(l(o,"recordImages",`${a}_${u}`)).then(k=>{if(t!==U.current||!k.exists())return;const B=k.data();F(B.image||null),h(B.image2||null)}).catch(k=>console.error(k)).finally(()=>{t===U.current&&nt(!1)})},[u,a,e,i]),useEffect(()=>{var o;const t=(o=g[a])==null?void 0:o[u];if(t){const l=JSON.parse(JSON.stringify(t));l.options||(l.options=[]),delete l.image,delete l.image2,n(l),!H.current&&(t.image||t.image2)&&(F(t.image||null),h(t.image2||null)),M(l.memo||"")}else n(emptyEntry()),M("");f(!1)},[u,g,a]);const ft=(t,o,l)=>{l!==""&&!/^\d+$/.test(l)||(n(C=>({...C,[t]:{...C[t],[o]:l}})),f(!1))},zt=()=>{n(t=>({...t,options:[...t.options||[],{label:"",amount:""}]})),f(!1)},ut=(t,o,l)=>{o==="amount"&&l!==""&&!/^-?\d+$/.test(l)||(n(C=>{const k=[...C.options||[]];return k[t]={...k[t],[o]:l},{...C,options:k}}),f(!1))},Dt=t=>{n(o=>({...o,options:(o.options||[]).filter((l,C)=>C!==t)})),f(!1)},V=()=>{H.current=!0,U.current++,nt(!1)},Bt=async()=>{var t;if(ot){alert("画像を読み込み中です。少し待ってから保存してください。");return}z(!0);try{const o=JSON.parse(JSON.stringify(v));delete o.image,delete o.image2,W.trim()?o.memo=W.trim():delete o.memo;const l=(t=g[a])==null?void 0:t[u],C=!!(l&&(l.image||l.image2));(H.current||C)&&await saveImages(a,u,w,E),await saveRecord(a,u,o),H.current=!1,f(!0)}catch(o){alert("保存に失敗しました: "+o.message)}z(!1)},Rt=async t=>{const o=t.target.files[0];if(o){J(!0);try{const l=await compressImage(o);V(),F(l),f(!1)}catch{alert("画像の読み込みに失敗しました")}J(!1),t.target.value=""}},Wt=()=>{window.confirm("画像を削除しますか？")&&(V(),F(null),f(!1))},Et=async t=>{const o=t.target.files[0];if(o){st(!0);try{const l=await compressImage(o);V(),h(l),f(!1)}catch{alert("画像の読み込みに失敗しました")}st(!1),t.target.value=""}},It=()=>{window.confirm("画像を削除しますか？")&&(V(),h(null),f(!1))},Tt=async()=>{var t;if((t=g[a])!=null&&t[u]){z(!0);try{await deleteRecord(a,u),H.current=!1,F(null),h(null),n(emptyEntry()),f(!1)}catch(o){alert("削除に失敗しました: "+o.message)}z(!1)}},yt=async()=>{const{auth:t,signOut:o}=window.__firebase;await o(t)};if(e===void 0)return React.createElement("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#1A3A5C"}},React.createElement("div",{className:"spinner"}));if(!e)return React.createElement(LoginScreen,null);if(!i)return React.createElement("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#F2F4F7",padding:20}},React.createElement("div",{style:{background:"#fff",borderRadius:16,padding:24,maxWidth:360,textAlign:"center"}},React.createElement("div",{style:{fontSize:32,marginBottom:12}},"⚙️"),React.createElement("div",{style:{fontWeight:700,color:"#1A3A5C",marginBottom:8}},"プロフィール未設定"),React.createElement("div",{style:{fontSize:13,color:"#666",marginBottom:16}},"管理者にFirestoreへのユーザー登録を依頼してください。"),React.createElement("button",{onClick:yt,style:{padding:"10px 24px",borderRadius:10,border:"none",background:"#EF4444",color:"#fff",fontWeight:700,cursor:"pointer"}},"ログアウト")));const L=S.find(t=>t.uid===a)||S[0],bt=S.findIndex(t=>t.uid===a),I=staffColor(bt<0?0:bt),j=monthKey(u),$t=g[a]||{},T=Object.entries($t).filter(([t])=>monthKey(t)===j).sort(([t],[o])=>t.localeCompare(o)),dt=T.reduce((t,[,o])=>t+calcBaseTotal(o),0),X=T.reduce((t,[,o])=>t+calcOptionTotal(o),0),K=dt+X,Mt=SIZES.map(t=>{let o=0,l=0,C=0,k=0;const B=getRates();return T.forEach(([,D])=>{var Z,N;const R=parseInt((Z=D[t])==null?void 0:Z.delivery)||0,_=parseInt((N=D[t])==null?void 0:N.pickup)||0;o+=R,l+=R*B[t].delivery,C+=_,k+=_*B[t].pickup}),{size:t,dc:o,da:l,pc:C,pa:k}}).filter(t=>t.dc>0||t.pc>0),Lt=T.flatMap(([t,o])=>(o.options||[]).filter(l=>l.label||l.amount).map(l=>({date:t,label:l.label,amount:parseInt(l.amount)||0}))),at=S.map((t,o)=>{const l=g[t.uid]||{},C=Object.entries(l).filter(([D])=>monthKey(D)===j),k=C.reduce((D,[,R])=>D+calcBaseTotal(R),0),B=C.reduce((D,[,R])=>D+calcOptionTotal(R),0);return{...t,idx:o,base:k,opt:B,total:k+B,dayCount:C.filter(([,D])=>hasSalesData(D)).length}}),_t=at.reduce((t,o)=>t+o.total,0),rt=calcBaseTotal(v),O=calcOptionTotal(v),jt=rt+O,G=hasSalesData(v)||!!W.trim()||!!w||!!E,mt=T.filter(([,t])=>hasSalesData(t)).length,xt={width:"100%",padding:"8px 4px",fontSize:18,textAlign:"center",border:"1.5px solid #D0D7E3",borderRadius:8,outline:"none",boxSizing:"border-box",color:"#1A3A5C"};if(Ct)return React.createElement(PrintView,{onBack:()=>lt(!1),staffName:(L==null?void 0:L.name)||"",currentMonth:j,monthDays:T,monthBaseTotal:dt,monthOptionTotal:X,monthTotal:K,monthBreakdown:Mt,monthOptions:Lt});const Ot=$?[["input","📋 日次入力"],["month","📊 月次集計"],["all","🏆 全員集計"]]:[["input","📋 日次入力"],["month","📊 月次集計"]];return React.createElement("div",{style:{fontFamily:"'Helvetica Neue',Arial,sans-serif",background:"#F2F4F7",minHeight:"100vh",maxWidth:480,margin:"0 auto",paddingBottom:80}},At&&$&&React.createElement(StaffModal,{onClose:()=>ct(!1),currentUid:e.uid}),wt&&React.createElement(AccountModal,{onClose:()=>tt(!1),authUser:e,userProfile:i,onDeleteAccount:()=>tt(!1)}),kt&&$&&React.createElement(RatesModal,{onClose:()=>pt(!1),currentRates:Ft,onSaved:t=>gt(t)}),React.createElement("div",{style:{background:`linear-gradient(135deg,#1A3A5C 0%,${I} 100%)`,color:"#fff",padding:"16px 16px 10px",position:"sticky",top:0,zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.18)"}},React.createElement("div",{style:{display:"flex",alignItems:"center",marginBottom:8}},React.createElement("div",{style:{flex:1}},React.createElement("div",{style:{fontSize:11,opacity:.75,letterSpacing:1}},"アートセッティングデリバリー（ASC）"),React.createElement("div",{style:{fontSize:18,fontWeight:700}},"売上記録アプリ")),React.createElement("div",{style:{display:"flex",gap:6}},$&&React.createElement("button",{onClick:()=>ct(!0),style:{background:"rgba(255,255,255,0.18)",border:"none",color:"#fff",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,cursor:"pointer"}},"👥"),$&&React.createElement("button",{onClick:()=>pt(!0),style:{background:"rgba(255,255,255,0.18)",border:"none",color:"#fff",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,cursor:"pointer"}},"💴"),React.createElement("button",{onClick:()=>tt(!0),style:{background:"rgba(255,255,255,0.18)",border:"none",color:"#fff",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,cursor:"pointer"}},"⚙️"),React.createElement("button",{onClick:yt,style:{background:"rgba(255,255,255,0.18)",border:"none",color:"#fff",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,cursor:"pointer"}},"ログアウト"))),React.createElement("div",{style:{fontSize:11,opacity:.8,marginBottom:8}},"👤 ",i.name,React.createElement("span",{style:{background:$?"rgba(255,215,0,0.3)":"rgba(255,255,255,0.15)",borderRadius:4,padding:"1px 6px",fontSize:10}},$?"👑 管理者":"スタッフ")),$&&S.length>1&&React.createElement("div",{style:{display:"flex",gap:6,overflowX:"auto",paddingBottom:4,marginBottom:8,scrollbarWidth:"none"}},S.map((t,o)=>React.createElement("button",{key:t.uid,onClick:()=>x(t.uid),style:{flexShrink:0,padding:"5px 12px",borderRadius:20,border:"2px solid",borderColor:a===t.uid?"#fff":"rgba(255,255,255,0.35)",background:a===t.uid?"#fff":"rgba(255,255,255,0.12)",color:a===t.uid?staffColor(o):"#fff",fontWeight:a===t.uid?700:400,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}},t.name))),React.createElement("div",{style:{display:"flex",gap:6}},Ot.map(([t,o])=>React.createElement("button",{key:t,onClick:()=>m(t),style:{flex:1,padding:"6px 0",borderRadius:8,border:"none",background:s===t?"#fff":"rgba(255,255,255,0.18)",color:s===t?"#1A3A5C":"#fff",fontWeight:s===t?700:400,fontSize:12,cursor:"pointer"}},o)))),q&&React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",padding:40}},React.createElement("div",{className:"spinner"})),!q&&s==="input"&&React.createElement("div",{style:{padding:"14px 12px 0"}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:10,padding:"8px 12px",background:"#fff",borderRadius:10,boxShadow:"0 1px 4px rgba(0,0,0,0.07)",borderLeft:`4px solid ${I}`}},React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:I}}),React.createElement("span",{style:{fontWeight:700,fontSize:15,color:I}},L==null?void 0:L.name),React.createElement("span",{style:{fontSize:12,color:"#888",marginLeft:4}},"の記録")),React.createElement("div",{style:{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}},React.createElement("span",{style:{fontSize:15}},"📅"),React.createElement("input",{type:"date",value:u,onChange:t=>y(t.target.value),style:{border:"none",fontSize:16,fontWeight:600,color:"#1A3A5C",background:"transparent",flex:1,outline:"none"}}),((vt=g[a])==null?void 0:vt[u])&&React.createElement("span",{style:{fontSize:11,background:"#E8F5E9",color:"#388E3C",borderRadius:6,padding:"2px 8px",fontWeight:600}},"保存済")),React.createElement("div",{style:{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",marginBottom:12}},React.createElement("div",{style:{display:"grid",gridTemplateColumns:"52px 1fr 1fr",background:"#1A3A5C",color:"#fff",padding:"8px 10px",fontSize:12,fontWeight:600,gap:6,textAlign:"center"}},React.createElement("div",null,"サイズ"),React.createElement("div",null,"配達",React.createElement("br",null),React.createElement("span",{style:{fontWeight:400,opacity:.8,fontSize:10}},"件数")),React.createElement("div",null,"集荷",React.createElement("br",null),React.createElement("span",{style:{fontWeight:400,opacity:.8,fontSize:10}},"件数"))),SIZES.map((t,o)=>{var l,C,k,B;return React.createElement("div",{key:t,style:{display:"grid",gridTemplateColumns:"52px 1fr 1fr",alignItems:"center",gap:6,padding:"8px 10px",background:o%2===0?"#fff":"#F8FAFC",borderBottom:"1px solid #EEF1F5"}},React.createElement("div",{style:{fontWeight:700,fontSize:18,color:"#1A3A5C",textAlign:"center"}},t),React.createElement("input",{type:"number",inputMode:"numeric",min:"0",placeholder:"0",value:(C=(l=v[t])==null?void 0:l.delivery)!=null?C:"",onChange:D=>ft(t,"delivery",D.target.value),tabIndex:o+1,style:{...xt,background:"#F5F8FF"}}),React.createElement("input",{type:"number",inputMode:"numeric",min:"0",placeholder:"0",value:(B=(k=v[t])==null?void 0:k.pickup)!=null?B:"",onChange:D=>ft(t,"pickup",D.target.value),tabIndex:SIZES.length+o+1,style:{...xt,background:"#FFF8F5"}}))}),React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 14px",background:"#EEF4FF",borderTop:"1.5px solid #C7D9F5"}},React.createElement("span",{style:{fontSize:12,color:"#5577AA",fontWeight:600}},"基本料金 小計"),React.createElement("span",{style:{fontSize:15,fontWeight:700,color:I}},"¥",fmt(rt)))),React.createElement("div",{style:{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",marginBottom:12}},React.createElement("div",{style:{background:"#5B4FCF",color:"#fff",padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}},React.createElement("span",{style:{fontWeight:700,fontSize:13}},"⭐ オプション料金"),React.createElement("button",{onClick:zt,style:{background:"rgba(255,255,255,0.22)",border:"none",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:13,fontWeight:700,cursor:"pointer"}},"＋ 追加")),(v.options||[]).length===0?React.createElement("div",{style:{padding:"18px 14px",textAlign:"center",color:"#AAB0BC",fontSize:13}},"「＋ 追加」でオプション料金を記録できます"):React.createElement("div",null,(v.options||[]).map((t,o)=>React.createElement("div",{key:o,style:{padding:"10px 12px",borderBottom:"1px solid #EEF1F5",background:o%2===0?"#fff":"#F8FAFC"}},React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center"}},React.createElement("input",{type:"text",placeholder:"内容（例：階段割増）",value:t.label,onChange:l=>ut(o,"label",l.target.value),style:{flex:1,padding:"8px 10px",fontSize:14,border:"1.5px solid #D0D7E3",borderRadius:8,outline:"none",color:"#1A3A5C",background:"#FAFAFF",boxSizing:"border-box"}}),React.createElement("div",{style:{display:"flex",alignItems:"center",gap:2}},React.createElement("span",{style:{fontSize:14,color:"#666"}},"¥"),React.createElement("input",{type:"number",inputMode:"numeric",placeholder:"0",value:t.amount,onChange:l=>ut(o,"amount",l.target.value),style:{width:90,padding:"8px 6px",fontSize:16,textAlign:"right",border:"1.5px solid #D0D7E3",borderRadius:8,outline:"none",color:(parseInt(t.amount)||0)<0?"#E05252":"#5B4FCF",fontWeight:700,background:"#FAF8FF",boxSizing:"border-box"}})),React.createElement("button",{onClick:()=>Dt(o),style:{background:"none",border:"none",fontSize:18,color:"#CCC",cursor:"pointer",padding:"0 2px",lineHeight:1}},"✕")))),React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 14px",background:"#F3F0FF",borderTop:"1.5px solid #CFC8F5"}},React.createElement("span",{style:{fontSize:12,color:"#5B4FCF",fontWeight:600}},"オプション 小計"),React.createElement("span",{style:{fontSize:15,fontWeight:700,color:O<0?"#E05252":"#5B4FCF"}},"¥",fmt(O))))),React.createElement("div",{style:{background:`linear-gradient(135deg,#1A3A5C,${I})`,color:"#fff",borderRadius:12,padding:"14px 16px",marginBottom:14,boxShadow:"0 2px 8px rgba(37,99,168,0.25)"}},React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:O!==0?8:0}},React.createElement("div",null,React.createElement("div",{style:{fontSize:11,opacity:.75}},"本日合計（税別）"),React.createElement("div",{style:{fontSize:11,opacity:.6}},u===today()?"今日":dateLabel(u))),React.createElement("div",{style:{fontSize:26,fontWeight:700}},"¥",fmt(jt))),O!==0&&React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:11,opacity:.75,borderTop:"1px solid rgba(255,255,255,0.2)",paddingTop:6}},React.createElement("span",null,"基本 ¥",fmt(rt)),React.createElement("span",null,"オプション ",O>=0?"+":"","¥",fmt(O)))),[{label:"📎 作業確認書",data:w,setData:F,uploading:Q,onSelect:Rt,onDelete:Wt,hint:"作業確認書の写真を添付できます",loadingImg:ot},{label:"📎 その他",data:E,setData:h,uploading:St,onSelect:Et,onDelete:It,hint:"その他の書類の写真を添付できます",loadingImg:ot}].map(({label:t,data:o,uploading:l,onSelect:C,onDelete:k,hint:B,loadingImg:D})=>React.createElement("div",{key:t,style:{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",marginBottom:12}},React.createElement("div",{style:{background:"#374151",color:"#fff",padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}},React.createElement("span",{style:{fontWeight:700,fontSize:13}},t),!o&&!D&&React.createElement("label",{style:{background:"rgba(255,255,255,0.22)",borderRadius:8,padding:"5px 12px",fontSize:13,fontWeight:700,cursor:"pointer",color:"#fff"}},l?"処理中...":"＋ 画像を追加",React.createElement("input",{type:"file",accept:"image/*",onChange:C,style:{display:"none"},disabled:l}))),o?React.createElement("div",{style:{padding:12}},React.createElement("img",{src:o,alt:"添付画像",onClick:()=>Y(o),style:{width:"100%",borderRadius:8,display:"block",marginBottom:10,cursor:"zoom-in"}}),React.createElement("div",{style:{display:"flex",gap:8}},React.createElement("label",{style:{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"10px",borderRadius:10,border:"1.5px solid #D0D7E3",background:"#F8FAFC",fontSize:13,fontWeight:600,color:"#555",cursor:"pointer"}},"🔄 画像を変更",React.createElement("input",{type:"file",accept:"image/*",onChange:C,style:{display:"none"},disabled:l})),React.createElement("button",{onClick:k,style:{flex:1,padding:"10px",borderRadius:10,border:"1.5px solid #FCA5A5",background:"#fff",color:"#EF4444",fontSize:13,fontWeight:600,cursor:"pointer"}},"🗑️ 画像を削除"))):React.createElement("div",{style:{padding:"20px 14px",textAlign:"center",color:"#AAB0BC",fontSize:13}},l||D?React.createElement("div",null,React.createElement("div",{className:"spinner",style:{margin:"0 auto 8px"}}),React.createElement("div",null,D?"画像を読み込み中...":"圧縮・処理中...")):React.createElement("div",null,React.createElement("div",{style:{fontSize:32,marginBottom:8}},"📷"),React.createElement("div",null,"「＋ 画像を追加」で",B.replace("の写真を添付できます","")),React.createElement("div",{style:{fontSize:11,color:"#BCC3CF",marginTop:4}},"自動で圧縮して保存されます"))))),React.createElement("div",{style:{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",marginBottom:12}},React.createElement("div",{style:{background:"#4B5563",color:"#fff",padding:"10px 14px",fontSize:13,fontWeight:700}},"📝 メモ"),React.createElement("div",{style:{padding:12}},React.createElement("textarea",{value:W,onChange:t=>{M(t.target.value),f(!1)},placeholder:"自由にメモを入力できます",rows:3,style:{width:"100%",padding:"10px 12px",fontSize:14,border:"1.5px solid #D0D7E3",borderRadius:10,outline:"none",color:"#1A3A5C",resize:"vertical",fontFamily:"inherit",lineHeight:1.6,boxSizing:"border-box"}}))),React.createElement("div",{style:{display:"flex",gap:10,marginBottom:10}},React.createElement("button",{onClick:Bt,disabled:!G||r,style:{flex:1,padding:"14px",borderRadius:12,border:"none",background:G&&!r?I:"#BCC3CF",color:"#fff",fontSize:16,fontWeight:700,cursor:G&&!r?"pointer":"not-allowed",boxShadow:G?`0 2px 8px ${I}55`:"none"}},r?"保存中...":b?"✅ 保存済み":"💾 保存する"),((ht=g[a])==null?void 0:ht[u])&&React.createElement("button",{onClick:Tt,disabled:r,style:{padding:"14px 16px",borderRadius:12,border:"1.5px solid #EF4444",background:"#fff",color:"#EF4444",fontSize:14,fontWeight:600,cursor:"pointer"}},"🗑️")),React.createElement("details",{style:{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",marginBottom:12}},React.createElement("summary",{style:{padding:"12px 14px",fontWeight:600,color:"#1A3A5C",cursor:"pointer",fontSize:13}},"📋 単価表を確認する"),React.createElement("div",{style:{padding:"0 10px 10px"}},React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,textAlign:"center",fontSize:12}},["サイズ","配達","集荷"].map(t=>React.createElement("div",{key:t,style:{fontWeight:700,color:"#888",padding:"6px 0",borderBottom:"1px solid #eee"}},t)),SIZES.map((t,o)=>[React.createElement("div",{key:t+"n",style:{padding:"5px 0",background:o%2?"#F8FAFC":"#fff",fontWeight:600}},t),React.createElement("div",{key:t+"d",style:{padding:"5px 0",background:o%2?"#F8FAFC":"#fff",color:"#2563A8"}},"¥",fmt(getRates()[t].delivery)),React.createElement("div",{key:t+"p",style:{padding:"5px 0",background:o%2?"#F8FAFC":"#fff",color:"#E07B39"}},"¥",fmt(getRates()[t].pickup))]))))),!q&&s==="month"&&React.createElement("div",{style:{padding:"14px 12px 0"}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:10,padding:"8px 12px",background:"#fff",borderRadius:10,boxShadow:"0 1px 4px rgba(0,0,0,0.07)",borderLeft:`4px solid ${I}`}},React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:I}}),React.createElement("span",{style:{fontWeight:700,fontSize:15,color:I}},L==null?void 0:L.name),React.createElement("span",{style:{fontSize:12,color:"#888",marginLeft:4}},"の月次集計")),React.createElement("div",{style:{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}},React.createElement("span",{style:{fontSize:15}},"📅"),React.createElement("input",{type:"month",value:j,onChange:t=>y(t.target.value+"-01"),style:{border:"none",fontSize:16,fontWeight:600,color:"#1A3A5C",background:"transparent",flex:1,outline:"none"}}),React.createElement("button",{onClick:()=>T.length>0&&lt(!0),disabled:T.length===0,style:{padding:"8px 12px",borderRadius:8,border:"none",background:T.length>0?"#D97706":"#BCC3CF",color:"#fff",fontSize:13,fontWeight:700,cursor:T.length>0?"pointer":"not-allowed",whiteSpace:"nowrap"}},"🖨️ 印刷")),React.createElement("div",{style:{background:`linear-gradient(135deg,#1A3A5C,${I})`,color:"#fff",borderRadius:14,padding:"18px",marginBottom:14,boxShadow:"0 3px 12px rgba(37,99,168,0.28)"}},React.createElement("div",{style:{fontSize:12,opacity:.75,marginBottom:4}},monthLabel(j)," 合計売上（税別）"),React.createElement("div",{style:{fontSize:32,fontWeight:700,marginBottom:8}},"¥",fmt(K)),React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,opacity:.8,borderTop:"1px solid rgba(255,255,255,0.2)",paddingTop:8}},React.createElement("span",null,"基本料金　¥",fmt(dt)),React.createElement("span",null,"オプション　",X>=0?"+":"","¥",fmt(X))),React.createElement("div",{style:{fontSize:11,opacity:.65,marginTop:4}},T.length,"日分の記録")),T.length>0?React.createElement("div",{style:{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",marginBottom:12}},React.createElement("div",{style:{background:"#1A3A5C",color:"#fff",padding:"10px 14px",fontSize:13,fontWeight:700}},"日別売上"),T.map(([t,o],l)=>{const C=calcDayTotal(o),k=(o.options||[]).some(B=>parseInt(B.amount)||0);return React.createElement("div",{key:t,style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 14px",background:l%2?"#F8FAFC":"#fff",borderBottom:"1px solid #EEF1F5",cursor:"pointer"},onClick:()=>{y(t),m("input")}},React.createElement("div",{style:{flex:1,minWidth:0,marginRight:10}},React.createElement("div",{style:{fontWeight:600,fontSize:14,color:"#1A3A5C"}},dateLabel(t),k&&React.createElement("span",{style:{marginLeft:6,fontSize:10,background:"#EDE9FF",color:"#5B4FCF",borderRadius:4,padding:"1px 5px",fontWeight:600}},"OP")),React.createElement("div",{style:{fontSize:11,color:"#999",marginTop:1}},React.createElement(DetailText,{e:o})),o.memo&&React.createElement("div",{style:{fontSize:12,color:"#555",marginTop:4,padding:"4px 8px",background:"#FFFBEB",borderLeft:"3px solid #F59E0B",borderRadius:4,whiteSpace:"pre-wrap",wordBreak:"break-word"}},"📝 ",o.memo)),React.createElement("div",{style:{textAlign:"right",flexShrink:0}},React.createElement("div",{style:{fontWeight:700,color:I,fontSize:15}},"¥",fmt(C)),React.createElement("div",{style:{fontSize:10,color:"#aaa"}},"編集 ›")))}),React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"13px 14px",background:"#EEF4FF",borderTop:"2px solid #2563A8"}},React.createElement("div",{style:{fontWeight:700,color:"#1A3A5C"}},"月合計"),React.createElement("div",{style:{fontWeight:800,fontSize:18,color:"#1A3A5C"}},"¥",fmt(K))),React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:"#F8FAFC",borderTop:"1px solid #D0D7E3"}},React.createElement("div",{style:{fontSize:13,color:"#5577AA",fontWeight:600}},"１日平均"),React.createElement("div",{style:{fontWeight:700,fontSize:15,color:"#5577AA"}},"¥",fmt(mt>0?Math.round(K/mt):0)))):React.createElement("div",{style:{textAlign:"center",padding:"40px 20px",color:"#AAB0BC"}},React.createElement("div",{style:{fontSize:40,marginBottom:12}},"📭"),React.createElement("div",{style:{fontWeight:600}},"この月の記録はまだありません"),React.createElement("div",{style:{fontSize:13,marginTop:6}},"「日次入力」タブから記録を追加しましょう"))),!q&&s==="all"&&$&&React.createElement("div",{style:{padding:"14px 12px 0"}},React.createElement("div",{style:{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}},React.createElement("span",{style:{fontSize:15}},"📅"),React.createElement("input",{type:"month",value:j,onChange:t=>y(t.target.value+"-01"),style:{border:"none",fontSize:16,fontWeight:600,color:"#1A3A5C",background:"transparent",flex:1,outline:"none"}})),React.createElement("div",{style:{background:"linear-gradient(135deg,#1A3A5C,#2563A8)",color:"#fff",borderRadius:14,padding:"18px",marginBottom:14,boxShadow:"0 3px 12px rgba(37,99,168,0.28)"}},React.createElement("div",{style:{fontSize:12,opacity:.75,marginBottom:4}},monthLabel(j)," 全スタッフ合計（税別）"),React.createElement("div",{style:{fontSize:32,fontWeight:700,marginBottom:4}},"¥",fmt(_t)),React.createElement("div",{style:{fontSize:11,opacity:.65}},S.length,"名のスタッフ")),at.map((t,o)=>React.createElement("div",{key:t.uid,style:{background:"#fff",borderRadius:12,padding:"14px",marginBottom:10,boxShadow:"0 1px 4px rgba(0,0,0,0.07)",borderLeft:`4px solid ${staffColor(t.idx)}`,cursor:"pointer"},onClick:()=>{x(t.uid),m("month")}},React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:t.dayCount>0?8:0}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:staffColor(t.idx)}}),React.createElement("span",{style:{fontWeight:700,fontSize:16,color:"#1A3A5C"}},t.name),t.dayCount>0&&React.createElement("span",{style:{fontSize:11,color:"#888"}},t.dayCount,"日")),React.createElement("div",{style:{textAlign:"right"}},React.createElement("div",{style:{fontWeight:800,fontSize:20,color:staffColor(t.idx)}},t.total>0?`¥${fmt(t.total)}`:React.createElement("span",{style:{color:"#CCC",fontSize:15}},"記録なし")))),t.dayCount>0&&React.createElement("div",{style:{borderTop:"1px solid #EEF1F5",paddingTop:6}},React.createElement("div",{style:{display:"flex",gap:14,fontSize:12,color:"#888",marginBottom:4}},React.createElement("span",null,"基本 ¥",fmt(t.base)),t.opt!==0&&React.createElement("span",null,"オプション ",t.opt>=0?"+":"","¥",fmt(t.opt)),React.createElement("span",{style:{marginLeft:"auto",color:"#aaa",fontSize:11}},"詳細 ›")),React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12}},React.createElement("span",{style:{color:"#5577AA",fontWeight:600}},"１日平均"),React.createElement("span",{style:{color:"#5577AA",fontWeight:700}},"¥",fmt(Math.round(t.total/t.dayCount))))))),at.every(t=>t.total===0)&&React.createElement("div",{style:{textAlign:"center",padding:"40px 20px",color:"#AAB0BC"}},React.createElement("div",{style:{fontSize:40,marginBottom:12}},"📭"),React.createElement("div",{style:{fontWeight:600}},"この月の記録はまだありません")),React.createElement(OldDataCleaner,null)),React.createElement("div",{style:{height:20}}))}ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App,null));
+</script>
+
+<!-- ===== ホーム画面に追加（アイコンのインストール） ===== -->
+<style>
+  #installBar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 90; display: flex; align-items: center; gap: 2px; background: #1A3A5C; color: #fff; border-radius: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.25); font-family: 'Helvetica Neue', Arial, sans-serif; }
+  #installBar[hidden], #installHelp[hidden] { display: none; }
+  #installBtn { background: none; border: none; color: #fff; font-size: 13px; font-weight: 700; padding: 10px 6px 10px 16px; cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  #installClose { background: none; border: none; color: rgba(255,255,255,0.7); font-size: 16px; padding: 10px 14px 10px 8px; cursor: pointer; }
+  #installHelp { position: fixed; inset: 0; z-index: 150; background: rgba(0,0,0,0.55); display: flex; align-items: flex-end; justify-content: center; font-family: 'Helvetica Neue', Arial, sans-serif; }
+  #installHelp .box { background: #fff; width: 100%; max-width: 480px; border-radius: 18px 18px 0 0; padding: 20px 18px calc(28px + env(safe-area-inset-bottom)); color: #1A3A5C; }
+  #installHelp .ttl { font-size: 17px; font-weight: 700; margin-bottom: 12px; }
+  #installHelp ol { padding-left: 20px; font-size: 14px; line-height: 1.9; color: #333; }
+  #installHelp .note { font-size: 12px; color: #888; margin-top: 10px; line-height: 1.7; }
+  #installHelp button { width: 100%; margin-top: 16px; padding: 13px; border-radius: 12px; border: none; background: #1A3A5C; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; }
+</style>
+<div id="installBar" class="no-print" hidden>
+  <button id="installBtn" type="button">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+    ホーム画面に追加
+  </button>
+  <button id="installClose" type="button" aria-label="閉じる">✕</button>
+</div>
+<div id="installHelp" class="no-print" hidden>
+  <div class="box">
+    <div class="ttl">📲 ホーム画面に追加する方法</div>
+    <div id="installHelpBody"></div>
+    <button id="installHelpClose" type="button">閉じる</button>
   </div>
-  <label>種類</label><select name="category" required></select>
-  <label>内容</label><input name="title" placeholder="例：5W-30 3.5L、前後パッド交換">
-  <div class="grid2 shopcost">
-    <div><label>お店・作業者</label><input name="shop" placeholder="例：自分、〇〇オート"></div>
-    <div><label>費用（円）</label><input name="cost" type="number" inputmode="numeric" min="0"></div>
-  </div>
-  <label>メモ</label><textarea name="memo"></textarea>
-  <div class="next">
-    <label>次回の目安（お知らせに表示）</label>
-    <div class="grid2">
-      <div><label>次回 km</label><input name="nextKm" type="number" inputmode="numeric" min="0"></div>
-      <div><label>次回 日付</label><input name="nextDate" type="date"></div>
-    </div>
-    <p class="hint" id="nextHint"></p>
-  </div>
-  <div class="actions">
-    <button type="button" class="btn danger small" id="rDel" hidden>削除</button>
-    <span class="sp"></span>
-    <button type="button" class="btn ghost" data-close>キャンセル</button>
-    <button type="submit" class="btn">保存</button>
-  </div>
-</form></dialog>
+</div>
+<script>
+(function () {
+  // アプリの部品を先に保存しておく仕組み（電波が弱いときも画面が開く）
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+  }
 
-<script type="module">
-// ====== Firebase 設定（Firebaseコンソール → プロジェクトの設定 → マイアプリ からコピー）======
-const firebaseConfig = {
-  apiKey: "AIzaSyDLSnmw5OmUZB360C0IMB_VsBhwtMxcQGs",
-  authDomain: "sharyo-mente.firebaseapp.com",
-  projectId: "sharyo-mente",
-  storageBucket: "sharyo-mente.firebasestorage.app",
-  messagingSenderId: "412469850432",
-  appId: "1:412469850432:web:07067c3f9288a309ba0aa5"
-};
-// 設定が未入力のときはお試しモード（データは保存されません）で動きます
-const DEMO = firebaseConfig.apiKey.startsWith("YOUR");
+  var bar = document.getElementById("installBar");
+  var help = document.getElementById("installHelp");
+  var helpBody = document.getElementById("installHelpBody");
+  var KEY = "asc-install-hidden-until";
+  var ua = navigator.userAgent;
+  var isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  var isMobile = isIOS || /Android/.test(ua);
+  var inApp = /Line\/|FBAN|FBAV|Instagram/i.test(ua);
+  var standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  var deferred = null;
 
-const CATS = ["オイル交換","エレメント(オイルフィルター)交換","フラッシング","タイヤ","バッテリー","ブレーキ","チェーン・駆動系","冷却水・その他液類","エアクリーナー・プラグ","点検","車検","修理","その他"];
-const SOON_DAYS = 30;
+  function hiddenByUser() {
+    try { return Date.now() < Number(localStorage.getItem(KEY) || 0); } catch (e) { return false; }
+  }
+  function show() { if (!standalone && !hiddenByUser()) bar.hidden = false; }
 
-const $ = s => document.querySelector(s);
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const num = v => (v === "" || v == null || isNaN(+v)) ? null : +v;
-const fmt = n => (n ?? 0).toLocaleString("ja-JP");
-const todayStr = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
-const addMonths = (ds, m) => { const [y,mo,d] = ds.split("-").map(Number); const t = new Date(y, mo-1+m, d); return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`; };
-const daysUntil = ds => Math.round((new Date(ds+"T00:00") - new Date(todayStr()+"T00:00")) / 864e5);
-const jpDate = ds => ds ? ds.replace(/^(\d+)-0?(\d+)-0?(\d+)$/, "$1/$2/$3") : "";
+  // Android（Chrome）：ボタンでそのままインストール画面を出せる
+  window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferred = e; show(); });
+  window.addEventListener("appinstalled", function () { bar.hidden = true; deferred = null; });
 
-// 以前の種類名を新しい名前にそろえる（保存済みのデータもそのまま新しい名前で表示）
-function normRec(r){
-  if (r.category === "オイルフィルター" || r.category === "エレメント(オイルフィルター)") r.category = "エレメント(オイルフィルター)交換";
-  if (r.category === "その他" && r.title === "フラッシング") r.category = "フラッシング";
-  return r;
-}
-const state = { user:null, vehicles:[], records:[], view:{name:"home"}, filter:"すべて" };
-let store;
+  // iPhoneなど：手順を案内する
+  if (isMobile) show();
 
-// ====== データ保存（Firebase / お試し）======
-async function initFirebase(){
-  const base = "https://www.gstatic.com/firebasejs/10.12.2/";
-  const { initializeApp } = await import(base+"firebase-app.js");
-  const A = await import(base+"firebase-auth.js");
-  const F = await import(base+"firebase-firestore.js");
-  const app = initializeApp(firebaseConfig);
-  const auth = A.getAuth(app), db = F.getFirestore(app);
-  let unsubs = [];
-  const col = name => F.collection(db, "users", state.user.uid, name);
-  store = {
-    login: () => A.signInWithPopup(auth, new A.GoogleAuthProvider()),
-    logout: () => A.signOut(auth),
-    async save(name, obj){
-      const { id, ...data } = obj; data.updatedAt = F.serverTimestamp();
-      if (id) await F.setDoc(F.doc(col(name), id), data, { merge:true });
-      else { data.createdAt = F.serverTimestamp(); await F.addDoc(col(name), data); }
-    },
-    async removeVehicle(id){
-      const b = F.writeBatch(db);
-      state.records.filter(r => r.vehicleId === id).forEach(r => b.delete(F.doc(col("records"), r.id)));
-      b.delete(F.doc(col("vehicles"), id));
-      await b.commit();
-    },
-    removeRecord: id => F.deleteDoc(F.doc(col("records"), id)),
-  };
-  A.onAuthStateChanged(auth, user => {
-    unsubs.forEach(u => u()); unsubs = [];
-    state.user = user; state.vehicles = []; state.records = [];
-    if (user) {
-      unsubs.push(F.onSnapshot(col("vehicles"), s => { state.vehicles = s.docs.map(d => ({ id:d.id, ...d.data() })); render(); }));
-      unsubs.push(F.onSnapshot(col("records"),  s => { state.records  = s.docs.map(d => normRec({ id:d.id, ...d.data() })); render(); }));
+  document.getElementById("installBtn").addEventListener("click", function () {
+    if (deferred) {
+      deferred.prompt();
+      deferred.userChoice.then(function () { deferred = null; bar.hidden = true; });
+      return;
     }
-    render();
-  });
-}
-
-function initDemo(){
-  let seq = 100; const t = todayStr();
-  state.user = { displayName:"お試しモード", uid:"demo" };
-  state.vehicles = [
-    { id:"v1", type:"car", name:"ワゴンR", model:"スズキ MH55S", plate:"", oilKm:5000, oilMonths:6, memo:"オイル 0W-20 約2.7L\nタイヤ 155/65R14" },
-    { id:"v2", type:"bike", name:"CB400SF", model:"ホンダ NC42", plate:"", oilKm:3000, oilMonths:6, memo:"" },
-  ];
-  state.records = [
-    { id:"r1", vehicleId:"v1", date:addMonths(t,-5), odo:43500, category:"オイル交換", title:"0W-20 2.7L", shop:"自分", cost:2800, nextKm:48500, nextDate:addMonths(t,1), memo:"" },
-    { id:"r2", vehicleId:"v1", date:addMonths(t,-14), odo:38000, category:"車検", title:"継続車検", shop:"〇〇モータース", cost:68000, nextDate:addMonths(t,10), memo:"ブレーキフルード交換込み" },
-    { id:"r3", vehicleId:"v2", date:addMonths(t,-7), odo:18000, category:"オイル交換", title:"10W-40 3L", shop:"自分", cost:3500, nextKm:21000, nextDate:addMonths(t,-1), memo:"" },
-    { id:"r4", vehicleId:"v2", date:addMonths(t,-2), odo:20900, category:"チェーン・駆動系", title:"チェーン清掃・注油", shop:"自分", cost:0, memo:"そろそろ張り調整" },
-  ];
-  store = {
-    login(){}, logout(){},
-    async save(name, obj){
-      const list = state[name];
-      if (obj.id) Object.assign(list.find(x => x.id === obj.id), obj);
-      else list.push({ ...obj, id:"x"+(++seq) });
-      render();
-    },
-    async removeVehicle(id){ state.vehicles = state.vehicles.filter(v => v.id !== id); state.records = state.records.filter(r => r.vehicleId !== id); render(); },
-    async removeRecord(id){ state.records = state.records.filter(r => r.id !== id); render(); },
-  };
-  render();
-}
-
-// ====== 計算 ======
-const vehicleRecords = vid => state.records.filter(r => r.vehicleId === vid)
-  .sort((a,b) => (b.date||"").localeCompare(a.date||"") || (b.odo||0)-(a.odo||0));
-const lastKm = vid => vehicleRecords(vid).find(r => r.odo)?.odo ?? null;
-const findV = id => state.vehicles.find(v => v.id === id);
-
-// 「もうすぐ／時期です」は日付で判定。距離は「次回は何kmで」と表示するだけ
-function dueStatus(r){
-  let level = 0; const parts = [];
-  if (r.nextKm) parts.push(`次回は ${fmt(r.nextKm)} km`);
-  if (r.nextDate) { const d = daysUntil(r.nextDate);
-    parts.push(`${jpDate(r.nextDate)}（${d < 0 ? `${-d}日 過ぎています` : d === 0 ? "今日" : `あと ${d}日`}）`);
-    level = d <= 0 ? 2 : d <= SOON_DAYS ? 1 : 0; }
-  return { level, text: parts.join("・") };
-}
-// 種類ごとに一番新しい記録の「次回」だけを見る（同じ種類で新しい記録があれば古い予定は消える）
-function dues(v){
-  const seen = new Set(), out = [];
-  for (const r of vehicleRecords(v.id)) {
-    const key = ["修理","その他"].includes(r.category) ? r.category+"|"+r.title : r.category;
-    if (seen.has(key)) continue; seen.add(key);
-    if (!r.nextKm && !r.nextDate) continue;
-    out.push({ r, v, ...dueStatus(r) });
-  }
-  return out.sort((a,b) => b.level - a.level);
-}
-const lastOf = (v, cat) => vehicleRecords(v.id).find(r => r.category === cat);
-
-// ====== 画面 ======
-function render(){
-  const app = $("#app");
-  $("#who").textContent = state.user ? (state.user.displayName || "") : "";
-  $("#logoutBtn").hidden = !state.user || DEMO;
-  $("#fab").hidden = !state.user || !state.vehicles.length;
-  if (!state.user) {
-    app.innerHTML = `<div class="center"><p style="font-size:44px;margin:0">🚗🏍️</p>
-      <p>車・バイクのオイル交換や修理の記録を<br>スマホとPCで共有して残せます。</p>
-      <button class="btn" id="loginBtn">Googleでログイン</button></div>`;
-    $("#loginBtn").onclick = () => store.login().catch(e => alert("ログインできませんでした：" + e.message));
-    return;
-  }
-  const banner = DEMO ? `<div class="banner">お試しモードです。index.html の firebaseConfig を入れると保存・同期されます。</div>` : "";
-  if (state.view.name === "vehicle" && findV(state.view.id)) return app.innerHTML = banner + vehicleView(findV(state.view.id)), bindVehicleView();
-  state.view = { name:"home" };
-  app.innerHTML = banner + homeView(); bindHome();
-}
-
-function dueRow(d, showVehicle){
-  const cls = ["b0","b1","b2"][d.level], label = ["予定","もうすぐ","時期です"][d.level];
-  return `<div class="due rec" data-rid="${d.r.id}">
-    <div><div class="t">${showVehicle ? esc(d.v.name)+"：" : ""}${esc(d.r.category)}${d.r.title && ["修理","その他"].includes(d.r.category) ? "（"+esc(d.r.title)+"）" : ""}</div>
-    <div class="s">${esc(d.text)}</div></div>
-    <span class="badge ${cls}">${label}</span></div>`;
-}
-
-const vIcon = v => v.photo ? `<img class="vicon" src="${esc(v.photo)}" alt="">` : `<div class="vicon">${v.type === "bike" ? "🏍️" : "🚗"}</div>`;
-function homeView(){
-  if (!state.vehicles.length) return `<div class="empty"><p>まだ車両がありません。</p><button class="btn" data-addv>＋ 車両を追加</button></div>`;
-  const alerts = state.vehicles.flatMap(v => dues(v)).filter(d => d.level > 0).sort((a,b) => b.level - a.level);
-  const cards = state.vehicles.slice().sort((a,b) => (a.name||"").localeCompare(b.name||"","ja")).map(v => {
-    const ds = dues(v), worst = Math.max(0, ...ds.map(d => d.level)), oil = lastOf(v, "オイル交換");
-    return `<div class="card vcard" data-vid="${v.id}">
-      ${vIcon(v)}
-      <div class="vmain"><div class="vname">${esc(v.name)}</div>
-        <div class="vsub">${esc([[v.maker, v.model].filter(Boolean).join(" "), v.plate].filter(Boolean).join("・")) || "&nbsp;"}</div>
-        <div class="vsub">前回オイル：${oil ? jpDate(oil.date)+(oil.odo ? "（"+fmt(oil.odo)+" km）" : "") : "記録なし"}</div></div>
-      ${worst ? `<span class="badge ${worst===2?"b2":"b1"}">${worst===2?"要交換":"もうすぐ"}</span>` : ""}
-    </div>`;
-  }).join("");
-  return `${alerts.length ? `<h2>🔔 お知らせ</h2><div class="card">${alerts.map(d => dueRow(d, true)).join("")}</div>` : ""}
-    <h2>車両</h2>${cards}
-    <div class="menu"><button class="btn ghost small" data-addv>＋ 車両を追加</button>
-    <button class="btn ghost small" id="csvBtn">Excelで書き出し</button></div>`;
-}
-function bindHome(){
-  document.querySelectorAll("[data-addv]").forEach(b => b.onclick = () => openVehicle());
-  document.querySelectorAll("[data-vid]").forEach(c => c.onclick = () => { state.view = { name:"vehicle", id:c.dataset.vid }; state.filter = "すべて"; render(); scrollTo(0,0); });
-  document.querySelectorAll("[data-rid]").forEach(c => c.onclick = () => openRecord(state.records.find(r => r.id === c.dataset.rid)));
-  const csv = $("#csvBtn"); if (csv) csv.onclick = exportXlsx;
-}
-
-function vehicleView(v){
-  const recs = vehicleRecords(v.id), ds = dues(v);
-  const total = recs.reduce((s,r) => s + (r.cost||0), 0);
-  const cats = ["すべて", ...CATS.filter(c => recs.some(r => r.category === c))];
-  const shown = state.filter === "すべて" ? recs : recs.filter(r => r.category === state.filter);
-  return `<button class="back" id="backBtn">‹ 一覧へ</button>
-    ${v.photo ? `<img class="vphoto" src="${esc(v.photo)}" alt="">` : ""}
-    <div class="row" style="margin-bottom:12px">${v.photo ? "" : vIcon(v)}
-      <div class="vmain"><div class="vname">${esc(v.name)}</div>
-        <div class="vsub">${esc([[v.maker, v.model].filter(Boolean).join(" "), v.plate].filter(Boolean).join("・"))}</div>
-        ${v.modelCode ? `<div class="vsub">型番：${esc(v.modelCode)}</div>` : ""}
-        ${v.vin ? `<div class="vsub">車体番号：${esc(v.vin)}</div>` : ""}
-        <div class="vsub">${esc([v.year, v.purchaseDate ? jpDate(v.purchaseDate) + " 購入" : ""].filter(Boolean).join("・"))}</div></div>
-      <button class="btn ghost small" id="editV">編集</button></div>
-    <div class="stats"><div class="stat"><b>${fmt(total)}</b><span>累計費用（円）</span></div>
-      <div class="stat"><b>${recs.length}</b><span>記録</span></div></div>
-    ${ds.length ? `<h2>次回の予定</h2><div class="card">${ds.map(d => dueRow(d, false)).join("")}</div>` : ""}
-    ${v.memo ? `<h2>メモ</h2><div class="card memo-box">${esc(v.memo)}</div>` : ""}
-    <h2>履歴</h2>
-    ${cats.length > 2 ? `<div class="chips">${cats.map(c => `<button class="chip ${c===state.filter?"on":""}" data-f="${esc(c)}">${esc(c)}</button>`).join("")}</div>` : ""}
-    ${shown.length ? shown.map(r => `<div class="card rec" data-rid="${r.id}">
-      <div class="top"><span class="cat">${esc(r.category)}</span><span class="date">${jpDate(r.date)}</span></div>
-      <div class="meta">${[r.odo ? fmt(r.odo)+" km" : "", r.title, r.shop, r.cost ? "¥"+fmt(r.cost) : ""].filter(Boolean).map(esc).join("　")}</div>
-      ${r.memo ? `<div class="memo">${esc(r.memo)}</div>` : ""}
-      ${r.nextKm || r.nextDate ? `<div class="meta">次回：${[r.nextKm ? fmt(r.nextKm)+" km" : "", jpDate(r.nextDate)].filter(Boolean).join(" / ")}</div>` : ""}
-    </div>`).join("") : `<div class="empty">まだ記録がありません。</div>`}`;
-}
-function bindVehicleView(){
-  const v = findV(state.view.id);
-  $("#backBtn").onclick = () => { state.view = { name:"home" }; render(); };
-  $("#editV").onclick = () => openVehicle(v);
-  document.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { state.filter = b.dataset.f; render(); });
-  document.querySelectorAll("[data-rid]").forEach(c => c.onclick = () => openRecord(state.records.find(r => r.id === c.dataset.rid)));
-}
-
-// ====== 車両フォーム ======
-const vForm = $("#vForm"), vDlg = $("#vDlg");
-let editingV = null, vPhoto = "";
-const MAKERS = /^(ヤマハ|ホンダ|スズキ|カワサキ|ダイハツ|トヨタ|日産|ニッサン|マツダ|スバル|三菱|いすゞ|レクサス)[・･\s]*/;
-function setPhoto(url){
-  vPhoto = url || "";
-  $("#vPhotoImg").hidden = !vPhoto; $("#vPhotoNone").hidden = !!vPhoto; $("#vPhotoDel").hidden = !vPhoto;
-  if (vPhoto) $("#vPhotoImg").src = vPhoto; else $("#vPhotoImg").removeAttribute("src");
-}
-function openVehicle(v){
-  editingV = v || null; vForm.reset();
-  $("#vTitle").textContent = v ? "車両を編集" : "車両を追加"; $("#vDel").hidden = !v;
-  const d = { ...(v || { type:"car", oilKm:5000, oilMonths:6 }) };
-  // 以前の「メーカー・車種」1枠のデータは、メーカー名を自動で分けて表示
-  if (v && d.maker === undefined && d.model) { const m = d.model.match(MAKERS); if (m) { d.maker = m[1]; d.model = d.model.slice(m[0].length); } }
-  // 「(ハイゼット)EBD-S201P」のような車種は、車種名と型番に分けて表示
-  if (v && d.modelCode === undefined && d.model) { const m = d.model.match(/^[(（](.+?)[)）]\s*([A-Za-z0-9-]+)$/); if (m) { d.model = m[1]; d.modelCode = m[2]; } }
-  // メモに入っている「車体番号：…」の行は、車体番号の欄へ移して表示
-  if (v && d.vin === undefined && d.memo) { const m = d.memo.match(/^車体番号[：:]\s*(.+)$/m); if (m) { d.vin = m[1].trim(); d.memo = d.memo.replace(m[0], "").replace(/^\n+/, ""); } }
-  setPhoto(d.photo);
-  for (const el of vForm.elements) if (el.name) {
-    if (el.type === "radio") el.checked = el.value === (d.type || "car"); else el.value = d[el.name] ?? "";
-  }
-  vDlg.showModal();
-}
-vForm.addEventListener("change", e => {
-  if (e.target.name === "type" && !editingV) vForm.oilKm.value = e.target.value === "bike" ? 3000 : 5000;
-});
-vForm.onsubmit = async e => {
-  e.preventDefault();
-  const f = vForm.elements;
-  const obj = { type:f.type.value, name:f.name.value.trim(), maker:f.maker.value.trim(), model:f.model.value.trim(), plate:f.plate.value.trim(),
-    year:f.year.value.trim(), purchaseDate:f.purchaseDate.value || null, photo:vPhoto,
-    modelCode:f.modelCode.value.trim(), vin:f.vin.value.trim(),
-    oilKm:num(f.oilKm.value), oilMonths:num(f.oilMonths.value), memo:f.memo.value };
-  if (editingV) obj.id = editingV.id;
-  try { await store.save("vehicles", obj); vDlg.close(); } catch(err) { alert("保存できませんでした：" + err.message); }
-};
-// 写真：撮影 or 選択 → 縮小してJPEGにし、車両データに一緒に保存（Firestoreの1件1MBまでに収める）
-async function shrinkImage(file){
-  const url = URL.createObjectURL(file);
-  try {
-    const img = await new Promise((ok, ng) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ng(new Error("画像を読み込めませんでした")); i.src = url; });
-    let max = 1000, q = 0.75, out;
-    do {
-      const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
-      const c = document.createElement("canvas");
-      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      out = c.toDataURL("image/jpeg", q); max *= 0.8; q = Math.max(0.5, q - 0.1);
-    } while (out.length > 700000 && max > 200);
-    return out;
-  } finally { URL.revokeObjectURL(url); }
-}
-for (const id of ["vCam","vFile"]) $("#"+id).onchange = async e => {
-  const file = e.target.files[0]; e.target.value = ""; if (!file) return;
-  try { setPhoto(await shrinkImage(file)); } catch(err) { alert(err.message); }
-};
-$("#vShoot").onclick = () => $("#vCam").click();
-$("#vPick").onclick = () => $("#vFile").click();
-$("#vPhotoDel").onclick = () => setPhoto("");
-
-$("#vDel").onclick = async () => {
-  const n = vehicleRecords(editingV.id).length;
-  if (!confirm(`「${editingV.name}」を削除しますか？\n記録 ${n} 件もいっしょに消えます。`)) return;
-  await store.removeVehicle(editingV.id); vDlg.close(); state.view = { name:"home" }; render();
-};
-
-// ====== 記録フォーム ======
-const rForm = $("#rForm"), rDlg = $("#rDlg");
-let editingR = null, nextAuto = true;
-rForm.category.innerHTML = CATS.map(c => `<option>${c}</option>`).join("");
-function openRecord(r){
-  editingR = r || null; rForm.reset();
-  rForm.vehicleId.innerHTML = state.vehicles.map(v => `<option value="${v.id}">${v.type==="bike"?"🏍️":"🚗"} ${esc(v.name)}</option>`).join("");
-  $("#rTitle").textContent = r ? "記録を編集" : "記録を追加"; $("#rDel").hidden = !r;
-  const vid = r?.vehicleId || (state.view.name === "vehicle" ? state.view.id : state.vehicles[0]?.id);
-  const d = r || { vehicleId:vid, date:todayStr(), category:"オイル交換" };
-  for (const el of rForm.elements) if (el.name) el.value = d[el.name] ?? "";
-  setOdoHint(); nextAuto = !r; if (!r) autoNext();
-  rDlg.showModal();
-}
-// 走行距離欄に、その車両で最後に記録した距離を薄く表示
-function setOdoHint(){
-  const km = lastKm(rForm.vehicleId.value);
-  rForm.odo.placeholder = km ? `前回 ${fmt(km)} km` : "";
-}
-// 種類ごとの「次回」自動入力
-function autoNext(){
-  if (!nextAuto) return;
-  const f = rForm.elements, v = findV(f.vehicleId.value), odo = num(f.odo.value), date = f.date.value || todayStr();
-  let km = null, mo = null;
-  switch (f.category.value) {
-    case "オイル交換": km = v?.oilKm; mo = v?.oilMonths; break;
-    case "エレメント(オイルフィルター)交換": km = v?.oilKm ? v.oilKm*2 : null; mo = v?.oilMonths ? v.oilMonths*2 : null; break;
-    case "点検": mo = 12; break;
-    case "車検": mo = 24; break;
-  }
-  f.nextKm.value = km && odo != null ? odo + km : "";
-  f.nextDate.value = mo ? addMonths(date, mo) : "";
-  $("#nextHint").textContent = (km || mo) ? "目安から自動で入れました。変更できます。" : "必要なら入力してください。";
-}
-rForm.addEventListener("input", e => {
-  if (["nextKm","nextDate"].includes(e.target.name)) { nextAuto = false; $("#nextHint").textContent = ""; }
-  else if (["category","odo","date","vehicleId"].includes(e.target.name)) { if (e.target.name === "vehicleId") setOdoHint(); autoNext(); }
-});
-rForm.onsubmit = async e => {
-  e.preventDefault();
-  const f = rForm.elements;
-  const obj = { vehicleId:f.vehicleId.value, date:f.date.value, odo:num(f.odo.value), category:f.category.value,
-    title:f.title.value.trim(), shop:f.shop.value.trim(), cost:num(f.cost.value), memo:f.memo.value,
-    nextKm:num(f.nextKm.value), nextDate:f.nextDate.value || null };
-  if (editingR) obj.id = editingR.id;
-  try {
-    await store.save("records", obj);
-    rDlg.close();
-  } catch(err) { alert("保存できませんでした：" + err.message); }
-};
-$("#rDel").onclick = async () => {
-  if (!confirm("この記録を削除しますか？")) return;
-  await store.removeRecord(editingR.id); rDlg.close();
-};
-document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
-
-// ====== CSV ======
-// 車両ごとにワークシートを分けたExcelファイルで書き出し（SheetJSを使うときだけ読み込む）
-let xlsxLib = null;
-function loadXlsx(){
-  if (xlsxLib) return xlsxLib;
-  return xlsxLib = new Promise((ok, ng) => {
-    const sc = document.createElement("script");
-    sc.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
-    sc.onload = () => ok(window.XLSX);
-    sc.onerror = () => { xlsxLib = null; ng(new Error("書き出しの準備ができませんでした。通信できる場所でもう一度お試しください。")); };
-    document.head.appendChild(sc);
-  });
-}
-async function exportXlsx(){
-  try {
-    const XLSX = await loadXlsx();
-    const wb = XLSX.utils.book_new(), used = new Set();
-    const vs = state.vehicles.slice().sort((a,b) => (a.name||"").localeCompare(b.name||"","ja"));
-    for (const v of vs) {
-      const recs = vehicleRecords(v.id).slice().reverse();   // 古い順
-      const info = [
-        [v.name],
-        [[v.maker, v.model].filter(Boolean).join(" "), v.modelCode ? "型番：" + v.modelCode : "", v.vin ? "車体番号：" + v.vin : "", v.plate ? "ナンバー：" + v.plate : ""].filter(Boolean),
-        [v.year, v.purchaseDate ? "購入日：" + jpDate(v.purchaseDate) : ""].filter(Boolean),
-        [],
-        ["日付","走行距離(km)","種類","内容","お店・作業者","費用(円)","次回km","次回日付","メモ"],
-      ];
-      const rows = recs.map(r => [jpDate(r.date), r.odo ?? "", r.category, r.title || "", r.shop || "", r.cost ?? "", r.nextKm ?? "", jpDate(r.nextDate), r.memo || ""]);
-      const total = recs.reduce((s,r) => s + (r.cost||0), 0);
-      const ws = XLSX.utils.aoa_to_sheet([...info, ...rows, [], ["", "", "", "", "合計", total]]);
-      ws["!cols"] = [11,12,22,34,18,10,10,11,40].map(w => ({ wch:w }));
-      // シート名は31文字まで・使えない記号を除く・重複しないように
-      let name = (v.name || "車両").replace(/[\\/?*\[\]:]/g, "").slice(0, 28) || "車両", n = 2, base = name;
-      while (used.has(name)) name = `${base}(${n++})`;
-      used.add(name);
-      XLSX.utils.book_append_sheet(wb, ws, name);
+    var html;
+    if (inApp) {
+      html = "<ol><li>右上（または右下）のメニューから<b>「ブラウザで開く」</b>を選びます</li><li>開いたSafari／Chromeで、もう一度このボタンを押してください</li></ol>" +
+             "<div class='note'>LINEなどアプリの中の画面からは、ホーム画面に追加できません。</div>";
+    } else if (isIOS && /CriOS|EdgiOS|FxiOS/.test(ua)) {
+      html = "<ol><li>アドレス欄の右にある<b>共有ボタン</b>（四角から↑が出たマーク）を押します</li><li>下にスクロールして<b>「ホーム画面に追加」</b>を押します（見つからなければ<b>「その他」</b>の中）</li><li>右上の<b>「追加」</b>を押すと完了です</li></ol>" +
+             "<div class='note'>うまくいかないときは、Safariで開いてお試しください。</div>";
+    } else if (isIOS) {
+      html = "<ol><li>アドレス欄の横の<b>「…」</b>を押し、<b>「共有」</b>を押します<br><span style='color:#888;font-size:12px'>（共有ボタン＝四角から↑が出たマークが画面に見えていれば、それを押してもOK）</span></li><li>メニューを下にスクロールして<b>「ホーム画面に追加」</b>を押します（見つからなければ<b>「さらに表示」</b>の中）</li><li><b>「Webアプリとして開く」</b>が出ていればオンにして、右上の<b>「追加」</b>を押すと完了です</li></ol>" +
+             "<div class='note'>Safariで開いてください。追加したアイコンから開くと、最初の1回だけログインが必要です。</div>";
+    } else {
+      html = "<ol><li>右上の<b>︙（メニュー）</b>を押します</li><li><b>「ホーム画面に追加」</b>または<b>「アプリをインストール」</b>を押します</li></ol>" +
+             "<div class='note'>Chromeで開くと、このボタンからそのまま追加できます。</div>";
     }
-    if (!vs.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["車両がありません"]]), "記録");
-    XLSX.writeFile(wb, `メンテ記録_${todayStr()}.xlsx`);
-  } catch (err) { alert(err.message); }
-}
-
-$("#fab").onclick = () => openRecord();
-$("#logoutBtn").onclick = () => store.logout();
-if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
-if (DEMO) initDemo(); else initFirebase().catch(e => { $("#app").innerHTML = `<div class="center">Firebaseの読み込みに失敗しました：${esc(e.message)}</div>`; });
+    helpBody.innerHTML = html;
+    help.hidden = false;
+  });
+  document.getElementById("installHelpClose").addEventListener("click", function () { help.hidden = true; });
+  help.addEventListener("click", function (e) { if (e.target === help) help.hidden = true; });
+  document.getElementById("installClose").addEventListener("click", function () {
+    bar.hidden = true;
+    try { localStorage.setItem(KEY, String(Date.now() + 14 * 24 * 60 * 60 * 1000)); } catch (e) {}
+  });
+})();
 </script>
 </body>
 </html>
